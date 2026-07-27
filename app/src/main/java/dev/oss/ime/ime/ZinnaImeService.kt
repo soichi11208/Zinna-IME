@@ -307,10 +307,11 @@ class ZinnaImeService : InputMethodService() {
     }
 
     private fun handleBackspace() {
+        // Route from the state before sending Backspace. Deleting the final composing character
+        // returns an empty Mozc state, but that must not turn the same key into an editor delete.
+        val hadComposition = isComposing
         val state = session.sendSpecialKey(KeyEvent.SpecialKey.BACKSPACE)
-        // mozc reports an empty composition both when it consumed the delete and when there was
-        // nothing to delete, so fall through to the editor whenever nothing was composing.
-        if (state == null || (!state.hasComposition && state.committedText.isEmpty())) {
+        if (BackspaceRouting.shouldDeleteFromEditor(hadComposition, state != null)) {
             currentInputConnection?.deleteSurroundingText(1, 0)
         }
         render(state)
@@ -400,12 +401,24 @@ class ZinnaImeService : InputMethodService() {
         val ic = currentInputConnection ?: return
         if (state == null) return
 
+        val hadComposition = isComposing
+        val removeOldEditorComposition =
+            BackspaceRouting.shouldRemoveOldEditorComposition(
+                hadComposition = hadComposition,
+                nextHasComposition = state.hasComposition,
+                committedText = state.committedText,
+            )
         ic.beginBatchEdit()
         if (state.committedText.isNotEmpty()) {
             ic.commitText(state.committedText, 1)
         }
         if (state.preedit.isEmpty()) {
-            ic.finishComposingText()
+            if (removeOldEditorComposition) {
+                // finishComposingText would confirm the stale one-character span instead.
+                ic.commitText("", 1)
+            } else {
+                ic.finishComposingText()
+            }
         } else {
             val styled = SpannableString(state.preedit).apply {
                 setSpan(UnderlineSpan(), 0, length, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)
