@@ -130,6 +130,7 @@ class ZinnaImeService : InputMethodService() {
             theme = this@ZinnaImeService.theme
             layout = loaded
             guideOverflowTop = stripHeight.toFloat()
+            guideStyle = settings.flickGuideStyle
             listener = FlickKeyboardView.OnKeyOutputListener(::onKeyOutput)
         }
 

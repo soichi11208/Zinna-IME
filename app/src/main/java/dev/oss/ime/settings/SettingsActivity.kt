@@ -37,6 +37,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
+import dev.oss.ime.keyboard.FlickGuideStyle
 import dev.oss.ime.keyboard.KeyboardStyle
 import dev.oss.ime.keyboard.LayoutRepository
 import dev.oss.ime.mozc.MozcEngine
@@ -147,6 +148,7 @@ private fun KeyboardCard() {
     val settings = remember { ImeSettings(context) }
 
     var style by remember { mutableStateOf(settings.keyboardStyle) }
+    var guide by remember { mutableStateOf(settings.flickGuideStyle) }
     var heightScale by remember { mutableStateOf(settings.keyHeightScale) }
 
     Card(modifier = Modifier.fillMaxWidth()) {
@@ -168,6 +170,31 @@ private fun KeyboardCard() {
                     settings.keyboardStyle = option
                 }
                 if (style == option) {
+                    Button(onClick = onSelect, modifier = Modifier.fillMaxWidth()) { Text(label) }
+                } else {
+                    OutlinedButton(
+                        onClick = onSelect,
+                        modifier = Modifier.fillMaxWidth(),
+                    ) { Text(label) }
+                }
+            }
+
+            HorizontalDivider()
+
+            Text("フリック中の表示", style = MaterialTheme.typography.bodyLarge)
+            Text(
+                "キーを押している間に何を出すか。フリック配列のときだけ効きます",
+                style = MaterialTheme.typography.bodySmall,
+            )
+            for ((option, label) in listOf(
+                FlickGuideStyle.PREVIEW to "離したら入る文字だけ",
+                FlickGuideStyle.DIRECTIONS to "4方向すべて",
+            )) {
+                val onSelect = {
+                    guide = option
+                    settings.flickGuideStyle = option
+                }
+                if (guide == option) {
                     Button(onClick = onSelect, modifier = Modifier.fillMaxWidth()) { Text(label) }
                 } else {
                     OutlinedButton(

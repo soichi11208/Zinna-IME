@@ -2,6 +2,7 @@ package dev.oss.ime.settings
 
 import android.content.Context
 import android.content.SharedPreferences
+import dev.oss.ime.keyboard.FlickGuideStyle
 import dev.oss.ime.keyboard.KeyboardStyle
 import java.io.File
 
@@ -60,6 +61,19 @@ class ImeSettings(context: Context) {
         }
 
     /**
+     * What a flick key shows while it is held. See [FlickGuideStyle].
+     *
+     * Defaults to the preview: the cross of four directions covers the neighbouring keys, which is
+     * where the eye is looking, and most of the time only one of the four is wanted.
+     */
+    var flickGuideStyle: FlickGuideStyle
+        get() = FlickGuideStyle.of(prefs.getString(KEY_FLICK_GUIDE, null))
+        set(value) {
+            prefs.edit().putString(KEY_FLICK_GUIDE, value.name).apply()
+            bumpRevision()
+        }
+
+    /**
      * The keyboard background image, or null for a plain colour.
      *
      * A copy under our own files directory, not the content URI the user picked: the IME runs in a
@@ -106,6 +120,7 @@ class ImeSettings(context: Context) {
         private const val BACKGROUND_FILE = "keyboard_background"
         private const val KEY_HEIGHT_SCALE = "key_height_scale"
         private const val KEY_KEYBOARD_STYLE = "keyboard_style"
+        private const val KEY_FLICK_GUIDE = "flick_guide_style"
         const val DEFAULT_BACKGROUND_OPACITY = 0.45f
         const val MIN_KEY_HEIGHT_SCALE = 0.7f
         const val MAX_KEY_HEIGHT_SCALE = 1.5f

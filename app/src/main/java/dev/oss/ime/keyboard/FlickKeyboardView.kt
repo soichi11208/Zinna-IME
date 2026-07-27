@@ -43,6 +43,16 @@ class FlickKeyboardView @JvmOverloads constructor(
             invalidate()
         }
 
+    /** What to draw while a finger rests on a flick key. See [FlickGuideStyle]. */
+    var guideStyle: FlickGuideStyle = FlickGuideStyle.PREVIEW
+        set(value) {
+            field = value
+            invalidate()
+        }
+
+    /** Reused so the preview costs no allocation on a path that redraws as the finger moves. */
+    private val previewRect = RectF()
+
     /** Whether the next letter, or every letter, is capitalised. See [KeyAction.Shift]. */
     private enum class ShiftState { OFF, ONCE, LOCKED }
 
@@ -190,8 +200,35 @@ class FlickKeyboardView @JvmOverloads constructor(
 
         // Guides go on top of every key so a guide near the edge is never clipped by a neighbour.
         for (touch in activeTouches.values) {
-            if (touch.key.spec.hasFlicks) drawFlickGuide(canvas, touch, radius)
+            if (!touch.key.spec.hasFlicks) continue
+            when (guideStyle) {
+                FlickGuideStyle.PREVIEW -> drawFlickPreview(canvas, touch, radius)
+                FlickGuideStyle.DIRECTIONS -> drawFlickGuide(canvas, touch, radius)
+            }
         }
+    }
+
+    /**
+     * A single bubble above the key showing what letting go now would type.
+     *
+     * The alternative — the full cross — puts a cell over each of the four neighbours, which is
+     * exactly where the eye is trying to look. This shows only the answer, and follows the finger
+     * as the direction changes.
+     */
+    private fun drawFlickPreview(canvas: Canvas, touch: Touch, radius: Float) {
+        val output = touch.key.spec.output(touch.direction) ?: return
+        val bounds = touch.key.bounds
+        // Above the key, so the finger is not covering the very thing it is meant to read.
+        previewRect.set(bounds)
+        previewRect.offset(0f, -bounds.height())
+        clampIntoView(previewRect)
+
+        guideBackgroundPaint.alpha = 255
+        canvas.drawRoundRect(previewRect, radius, radius, guideBackgroundPaint)
+        guideLabelPaint.color = theme.flickGuideSelectedLabelColor
+        val baseline =
+            previewRect.centerY() - (guideLabelPaint.descent() + guideLabelPaint.ascent()) / 2f
+        canvas.drawText(output.label, previewRect.centerX(), baseline, guideLabelPaint)
     }
 
     private fun drawFlickGuide(canvas: Canvas, touch: Touch, radius: Float) {
@@ -246,6 +283,21 @@ class FlickKeyboardView @JvmOverloads constructor(
      * The area extends [guideOverflowTop] above this view because the parent turns off child
      * clipping, letting the guide spill over the candidate strip rather than being cut off by it.
      */
+    /** Moves [rect] the shortest distance that puts it inside the drawable area. */
+    private fun clampIntoView(rect: RectF) {
+        val dx = when {
+            rect.left < 0f -> -rect.left
+            rect.right > width -> width - rect.right
+            else -> 0f
+        }
+        val dy = when {
+            rect.top < -guideOverflowTop -> -guideOverflowTop - rect.top
+            rect.bottom > height -> height - rect.bottom
+            else -> 0f
+        }
+        rect.offset(dx, dy)
+    }
+
     private fun fitShift(cells: Collection<RectF>): PointF {
         var left = Float.MAX_VALUE
         var top = Float.MAX_VALUE
