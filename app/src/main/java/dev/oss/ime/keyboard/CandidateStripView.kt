@@ -30,8 +30,14 @@ class CandidateStripView(context: Context) : HorizontalScrollView(context) {
     var theme: KeyboardTheme = KeyboardTheme.Default
         set(value) {
             field = value
+            for (i in 0 until container.childCount) {
+                applyTheme(container.getChildAt(i) as TextView)
+            }
             invalidate()
         }
+
+    /** Which chip currently carries the focus highlight, so only the two that change are touched. */
+    private var focusedChild = -1
 
     private val container = LinearLayout(context).apply {
         orientation = LinearLayout.HORIZONTAL
@@ -48,38 +54,72 @@ class CandidateStripView(context: Context) : HorizontalScrollView(context) {
         // Transparent so the panel behind — colour or the user's background image — shows through.
     }
 
+    /**
+     * Replaces the visible candidates.
+     *
+     * Reuses the chips already on screen instead of rebuilding them. This runs on every keystroke,
+     * and constructing a TextView is not cheap — it resolves attributes, allocates layout state and
+     * forces a full measure pass. Tearing down twenty of them and building twenty more per key was
+     * enough to make fast typing feel like the keyboard was falling behind.
+     *
+     * Each property is written only when it actually differs: TextView.setText and setBackground
+     * invalidate unconditionally, so assigning the same value still costs a layout pass.
+     */
     fun setCandidates(candidates: List<MozcSession.Candidate>, focusedIndex: Int) {
-        container.removeAllViews()
-        scrollTo(0, 0)
-        val padding = (12 * resources.displayMetrics.density).toInt()
-
-        candidates.forEachIndexed { index, candidate ->
-            val view = TextView(context).apply {
-                text = candidate.text
-                setTextSize(TypedValue.COMPLEX_UNIT_SP, theme.labelSizeSp)
-                setTextColor(theme.candidateTextColor)
-                setPadding(padding, padding / 2, padding, padding / 2)
-                gravity = Gravity.CENTER
-                isSingleLine = true
-                if (index == focusedIndex) setBackgroundColor(theme.keyPressedColor)
-                setOnClickListener { view ->
-                    // Picking a candidate commits text just as a keypress does, so it gets the same
-                    // confirmation. Without it the strip is the one part of the keyboard that feels
-                    // dead under the thumb.
-                    if (theme.hapticFeedback) {
-                        view.performHapticFeedback(HapticFeedbackConstants.KEYBOARD_TAP)
-                    }
-                    listener?.onCandidateSelected(candidate)
-                }
-            }
+        while (container.childCount > candidates.size) {
+            container.removeViewAt(container.childCount - 1)
+        }
+        while (container.childCount < candidates.size) {
             container.addView(
-                view,
+                newChip(),
                 LinearLayout.LayoutParams(
                     LinearLayout.LayoutParams.WRAP_CONTENT,
                     LinearLayout.LayoutParams.MATCH_PARENT,
                 ),
             )
         }
+
+        candidates.forEachIndexed { index, candidate ->
+            val view = container.getChildAt(index) as TextView
+            view.tag = candidate
+            if (view.text != candidate.text) view.text = candidate.text
+        }
+
+        if (focusedChild != focusedIndex) {
+            highlight(focusedChild, false)
+            highlight(focusedIndex, true)
+            focusedChild = focusedIndex
+        }
+        scrollTo(0, 0)
+    }
+
+    private fun highlight(index: Int, on: Boolean) {
+        val view = container.getChildAt(index) ?: return
+        if (on) view.setBackgroundColor(theme.keyPressedColor) else view.background = null
+    }
+
+    private fun newChip(): TextView = TextView(context).apply {
+        gravity = Gravity.CENTER
+        isSingleLine = true
+        applyTheme(this)
+        setOnClickListener { clicked ->
+            // Picking a candidate commits text just as a keypress does, so it gets the same
+            // confirmation. Without it the strip is the one part of the keyboard that feels
+            // dead under the thumb.
+            if (theme.hapticFeedback) {
+                clicked.performHapticFeedback(HapticFeedbackConstants.KEYBOARD_TAP)
+            }
+            // Read through the tag rather than capturing: the chip outlives the candidate it was
+            // first built for, so a captured one would commit whatever was showing keystrokes ago.
+            (clicked.tag as? MozcSession.Candidate)?.let { listener?.onCandidateSelected(it) }
+        }
+    }
+
+    private fun applyTheme(view: TextView) {
+        val padding = (12 * resources.displayMetrics.density).toInt()
+        view.setTextSize(TypedValue.COMPLEX_UNIT_SP, theme.labelSizeSp)
+        view.setTextColor(theme.candidateTextColor)
+        view.setPadding(padding, padding / 2, padding, padding / 2)
     }
 
     fun clear() = setCandidates(emptyList(), -1)

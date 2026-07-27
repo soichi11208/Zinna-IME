@@ -173,13 +173,12 @@ class FlickKeyboardView @JvmOverloads constructor(
     override fun onDraw(canvas: Canvas) {
         super.onDraw(canvas)
         val radius = theme.keyCornerRadiusDp * resources.displayMetrics.density
-        val pressedKeys = activeTouches.values.map { it.key }.toSet()
 
         for (placed in placedKeys) {
             // With flat keys only the pressed one gets a shape: the resting keys are their labels
             // and nothing else, so the panel (or the user's background image) shows through.
             val paint = when {
-                placed in pressedKeys -> keyPressedPaint
+                isPressed(placed) -> keyPressedPaint
                 theme.flatKeys -> null
                 placed.spec.style == KeyStyle.CHARACTER -> keyPaint
                 else -> modifierPaint
@@ -371,6 +370,20 @@ class FlickKeyboardView @JvmOverloads constructor(
             shift = ShiftState.OFF
             invalidate()
         }
+    }
+
+    /**
+     * Whether a finger is currently on [key].
+     *
+     * Scanned rather than collected into a set: onDraw runs on every touch move, and there are at
+     * most a couple of fingers down, so a handful of reference comparisons beats allocating a list
+     * and a set on each frame.
+     */
+    private fun isPressed(key: PlacedKey): Boolean {
+        for (touch in activeTouches.values) {
+            if (touch.key === key) return true
+        }
+        return false
     }
 
     /**

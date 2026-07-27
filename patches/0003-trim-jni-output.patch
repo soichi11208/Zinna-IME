@@ -1,0 +1,56 @@
+diff --git a/src/android/jni/mozcjni.cc b/src/android/jni/mozcjni.cc
+--- a/src/android/jni/mozcjni.cc
++++ b/src/android/jni/mozcjni.cc
+@@ -59,6 +59,42 @@
+ // The global instance of Mozc system to be initialized in onPostLoad().
+ std::unique_ptr<SessionHandler> g_session_handler;
+ 
++// Drops the parts of an Output that never cross into the app, before it is serialized.
++//
++// `all_candidate_words` dominates the response: typing one kana produces around 200 entries and
++// 78KB of protobuf, against 9 candidates actually shown and 250 bytes of everything else. Every
++// keystroke was serializing that, copying it over JNI, and parsing it back into 200 Java objects.
++//
++// The client reads exactly two fields of each entry — `id`, and whether `key` differs from what
++// was typed, which is how a prediction is told from a plain conversion. Everything else in there
++// (the value, annotations, attributes, debug logs) is already available from `candidate_window`
++// for the candidates being displayed, or is not used at all. The two debug-only lists go entirely.
++//
++// This trims the message; it does not change what the app can compute from it.
++void TrimOutputForClient(mozc::commands::Output* output) {
++  output->clear_removed_candidate_words_for_debug();
++  output->clear_incognito_candidate_words();
++
++  if (!output->has_all_candidate_words()) {
++    return;
++  }
++  for (auto& word : *output->mutable_all_candidate_words()->mutable_candidates()) {
++    // Presence is preserved, not just the values: the client distinguishes a candidate with no
++    // key from one whose key happens to be empty.
++    const bool had_id = word.has_id();
++    const bool had_key = word.has_key();
++    const auto id = word.id();
++    std::string key = word.key();
++    word.Clear();
++    if (had_id) {
++      word.set_id(id);
++    }
++    if (had_key) {
++      word.set_key(std::move(key));
++    }
++  }
++}
++
+ // Concrete implementation for MozcJni.evalCommand
+ jbyteArray JNICALL evalCommand(JNIEnv* env, jclass clazz,
+                                jbyteArray in_bytes_array) {
+@@ -68,6 +104,9 @@
+   command.ParseFromArray(in_bytes, in_size);
+   if (g_session_handler) {
+     g_session_handler->EvalCommand(&command);
++    if (command.has_output()) {
++      TrimOutputForClient(command.mutable_output());
++    }
+   } else {
+     LOG(DFATAL) << "Mozc session handler is not yet initialized";
+   }
