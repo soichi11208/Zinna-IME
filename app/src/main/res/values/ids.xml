@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!--
+      Remembers which icon a recycled candidate chip is currently showing, so the strip can skip
+      setting the same drawable again — assigning one costs a layout pass whether it changed or not.
+    -->
+    <item name="chip_icon" type="id" />
+</resources>

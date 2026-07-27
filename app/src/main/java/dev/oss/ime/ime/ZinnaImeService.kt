@@ -14,6 +14,7 @@ import androidx.core.view.ViewCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.doOnAttach
 import androidx.core.view.updatePadding
+import dev.oss.ime.R
 import dev.oss.ime.keyboard.CandidateStripView
 import dev.oss.ime.keyboard.FlickDirection
 import dev.oss.ime.keyboard.FlickKeyboardView
@@ -55,6 +56,11 @@ class ZinnaImeService : InputMethodService() {
 
     /** [ImeSettings.revision] the current input view was built from. */
     private var builtFromRevision = Int.MIN_VALUE
+
+    private val clipboard = ClipboardHistory()
+
+    /** The table key the previous keystroke sent, for [endTogglingIfRepeat]. */
+    private var lastTableKey: String? = null
 
     /**
      * The system-bar insets last dispatched to us.
@@ -174,8 +180,12 @@ class ZinnaImeService : InputMethodService() {
             setInputView(onCreateInputView())
         }
         if (!restarting) session.resetContext()
+        lastTableKey = null
         isComposing = false
-        candidateView?.clear()
+        // The only moment an input method is allowed to read the clipboard is while it is the
+        // active one, which is exactly now.
+        clipboard.record(getSystemService(Context.CLIPBOARD_SERVICE) as? android.content.ClipboardManager)
+        showIdleActions()
     }
 
     /**
@@ -193,6 +203,7 @@ class ZinnaImeService : InputMethodService() {
         // Anything half-composed at this point can no longer be committed anywhere sensible.
         session.resetContext()
         currentInputConnection?.finishComposingText()
+        lastTableKey = null
         candidateView?.clear()
     }
 
@@ -203,10 +214,16 @@ class ZinnaImeService : InputMethodService() {
 
     private fun onKeyOutput(output: KeyOutput, key: KeySpec, direction: FlickDirection) {
         when (val action = output.action) {
-            is KeyAction.Input -> render(session.sendText(action.text))
+            is KeyAction.Input -> {
+                endTogglingIfRepeat(action.text)
+                render(session.sendText(action.text))
+                lastTableKey = action.text
+            }
 
             // The dakuten/small-kana cycle is a table entry, not a session command: mozc's flick
             // table maps '*' onto "advance the preceding kana one step" (あ→ぁ→あ, は→ば→ぱ→は).
+            // Deliberately outside endTogglingIfRepeat: the cycle *is* mozc's toggling, so ending
+            // it between two presses of this key resets は→ば→ぱ back to は.
             is KeyAction.ModifyChar -> render(session.sendText(CYCLE_MODIFIER_KEY))
 
             is KeyAction.InsertSymbol -> handleSymbol(action.text)
@@ -239,6 +256,27 @@ class ZinnaImeService : InputMethodService() {
                 imm.showInputMethodPicker()
             }
         }
+        // Anything that is not a character ends the run, so the key after it starts a new one.
+        if (output.action !is KeyAction.Input) lastTableKey = null
+    }
+
+    /**
+     * Stops mozc's toggling when the same table key arrives twice in a row.
+     *
+     * A 12-key plane sends mozc a table key, and the same one twice advances that key's cycle
+     * instead of repeating it: "22" gives b rather than aa, and "11" on the symbol plane gives ☆
+     * rather than 11. That is how a phone without flick input reaches the other characters — but
+     * every one of them is on a flick direction here, so the cycle only ever gets in the way.
+     *
+     * STOP_KEY_TOGGLING is mozc's own command for it: it settles the pending character so the next
+     * press begins a new one. Sent only on a repeat, so an ordinary keystroke still costs one round
+     * trip.
+     *
+     * The dakuten key is deliberately not routed through here. Its cycle は→ば→ぱ *is* mozc's
+     * toggling, and ending it between presses drops the character back to は.
+     */
+    private fun endTogglingIfRepeat(tableKey: String) {
+        if (lastTableKey == tableKey) session.stopKeyToggling()
     }
 
     /**
@@ -352,6 +390,7 @@ class ZinnaImeService : InputMethodService() {
         }
         // Finalise before swapping planes so a half-typed kana is not silently discarded.
         render(session.submit())
+        lastTableKey = null
         layout = next
         keyboardView?.layout = next
         session.applyInputStyle(next.inputStyle)
@@ -376,7 +415,52 @@ class ZinnaImeService : InputMethodService() {
         ic.endBatchEdit()
 
         isComposing = state.hasComposition
-        candidateView?.setCandidates(state.candidates, state.focusedCandidateIndex)
+        if (state.candidates.isEmpty()) {
+            showIdleActions()
+        } else {
+            candidateView?.setCandidates(state.candidates, state.focusedCandidateIndex)
+        }
+    }
+
+    /**
+     * What the strip shows when there is nothing to convert.
+     *
+     * Undo, and a way into the clipboard — the two things Gboard puts there, and the two that are
+     * otherwise unreachable without leaving the keyboard.
+     */
+    private fun showIdleActions() {
+        val view = candidateView ?: return
+        val actions = mutableListOf<CandidateStripView.Action>()
+        if (clipboard.items().isNotEmpty()) {
+            actions += CandidateStripView.Action(CLIPBOARD_LABEL, R.drawable.ic_clipboard) { showClipboard() }
+        }
+        actions += CandidateStripView.Action(UNDO_LABEL, R.drawable.ic_undo) { render(session.undo()) }
+        view.setActions(actions)
+    }
+
+    /**
+     * Swaps the strip over to the stored clippings, each one pasting itself.
+     *
+     * Labels are cut down to a chip's worth of text; the whole clipping is still what gets pasted.
+     */
+    private fun showClipboard() {
+        val view = candidateView ?: return
+        val actions = mutableListOf<CandidateStripView.Action>()
+        actions += CandidateStripView.Action(BACK_LABEL) { showIdleActions() }
+        for (text in clipboard.items()) {
+            actions += CandidateStripView.Action(chipLabel(text)) {
+                if (isComposing) render(session.submit())
+                currentInputConnection?.commitText(text, 1)
+                showIdleActions()
+            }
+        }
+        view.setActions(actions)
+    }
+
+    private fun chipLabel(text: String): String {
+        val flattened = text.replace(Regex("\\s+"), " ").trim()
+        return if (flattened.length <= CLIP_LABEL_LIMIT) flattened
+        else flattened.take(CLIP_LABEL_LIMIT) + "…"
     }
 
     companion object {
@@ -387,5 +471,12 @@ class ZinnaImeService : InputMethodService() {
 
         /** U+3000 IDEOGRAPHIC SPACE, what a Japanese input mode types for the space key. */
         private const val FULL_WIDTH_SPACE = "　"
+
+        private const val CLIPBOARD_LABEL = "クリップボード"
+        private const val UNDO_LABEL = "元に戻す"
+        private const val BACK_LABEL = "✕"
+
+        /** How much of a clipping fits on a chip before it stops being readable. */
+        private const val CLIP_LABEL_LIMIT = 24
     }
 }

@@ -13,6 +13,15 @@ Bundled binaries built from Mozc sources:
 The dictionary data incorporates several corpora with their own terms; see
 third_party/mozc/src/data/dictionary_oss/README.txt upstream for the full list.
 
+Bundled icons:
+  Bootstrap Icons  (app/src/main/res/drawable/ic_clipboard.xml, ic_undo.xml)
+  https://icons.getbootstrap.com
+  Copyright (c) 2019-2024 The Bootstrap Authors
+  Licensed under the MIT License.
+  The two files above are the upstream "clipboard" and "arrow-counterclockwise"
+  icons, converted from SVG to Android vector drawables. The path data is
+  unmodified.
+
 Bundled supplementary dictionary:
   dic-nico-intersection-pixiv  (mozc/src/main/assets/dictionaries/)
   https://github.com/ncaq/dic-nico-intersection-pixiv

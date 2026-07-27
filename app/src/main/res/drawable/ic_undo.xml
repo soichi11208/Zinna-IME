@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Bootstrap Icons "arrow-counterclockwise" (https://icons.getbootstrap.com), MIT licensed. See NOTICE.
+  Converted from the upstream SVG; the path data is unmodified, only the 16x16 viewBox is
+  restated as viewportWidth/Height and the fill is left white so it can be tinted.
+-->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp"
+    android:height="24dp"
+    android:viewportWidth="16"
+    android:viewportHeight="16">
+    <path
+        android:fillColor="#FFFFFFFF"
+        android:fillType="evenOdd"
+        android:pathData="M8 3a5 5 0 1 1-4.546 2.914.5.5 0 0 0-.908-.417A6 6 0 1 0 8 2z" />
+    <path
+        android:fillColor="#FFFFFFFF"
+        android:pathData="M8 4.466V.534a.25.25 0 0 0-.41-.192L5.23 2.308a.25.25 0 0 0 0 .384l2.36 1.966A.25.25 0 0 0 8 4.466" />
+</vector>
