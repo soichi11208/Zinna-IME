@@ -311,7 +311,7 @@ class ZinnaImeService : InputMethodService() {
         // returns an empty Mozc state, but that must not turn the same key into an editor delete.
         val hadComposition = isComposing
         val state = session.sendSpecialKey(KeyEvent.SpecialKey.BACKSPACE)
-        if (BackspaceRouting.shouldDeleteFromEditor(hadComposition, state != null)) {
+        if (BackspaceRouting.shouldDeleteFromEditor(hadComposition)) {
             currentInputConnection?.deleteSurroundingText(1, 0)
         }
         render(state)
@@ -399,7 +399,10 @@ class ZinnaImeService : InputMethodService() {
 
     private fun render(state: MozcSession.State?) {
         val ic = currentInputConnection ?: return
-        if (state == null) return
+        if (state == null) {
+            recoverFromLostSession(ic)
+            return
+        }
 
         val hadComposition = isComposing
         val removeOldEditorComposition =
@@ -433,6 +436,26 @@ class ZinnaImeService : InputMethodService() {
         } else {
             candidateView?.setCandidates(state.candidates, state.focusedCandidateIndex)
         }
+    }
+
+    /**
+     * Puts the keyboard back into a usable state after mozc failed to answer.
+     *
+     * A null response means the call across JNI did not complete, so what mozc believes is now
+     * unknown — but the editor is still showing the composing span from the last successful render,
+     * and [isComposing] still says a composition exists. Leaving both is what wedges the keyboard:
+     * Backspace routes to mozc because a composition is believed to exist, mozc has nothing to
+     * delete, and the key stops doing anything at all.
+     *
+     * The composition is finished rather than dropped. The characters were typed on purpose, so
+     * they stay in the editor as ordinary text; only the ability to keep converting them is lost.
+     */
+    private fun recoverFromLostSession(ic: android.view.inputmethod.InputConnection) {
+        Log.w(TAG, "no response from mozc; finishing the composition and resetting state")
+        if (isComposing) ic.finishComposingText()
+        isComposing = false
+        lastTableKey = null
+        showIdleActions()
     }
 
     /**
