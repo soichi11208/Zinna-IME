@@ -1,0 +1,22 @@
+[package]
+name = "karukan-jni"
+version = "0.1.0"
+edition = "2021"
+
+# Standalone: karukan has its own workspace and this must not be pulled into it.
+[workspace]
+
+[lib]
+name = "karukan"
+crate-type = ["cdylib"]
+
+[dependencies]
+karukan-engine = { path = "../../third_party/karukan/karukan-engine" }
+jni = "0.21"
+
+[profile.release]
+opt-level = 3
+strip = true
+
+[[example]]
+name = "convert"

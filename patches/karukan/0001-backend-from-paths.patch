@@ -1,0 +1,24 @@
+diff --git a/karukan-engine/src/kanji/backend.rs b/karukan-engine/src/kanji/backend.rs
+index f7be6af..60502e4 100644
+--- a/karukan-engine/src/kanji/backend.rs
++++ b/karukan-engine/src/kanji/backend.rs
+@@ -70,6 +70,19 @@ impl Backend {
+             .ok_or_else(|| KanjiError::UnknownVariant(variant_id.to_string()))?;
+         Self::from_variant(family, variant)
+     }
++
++    /// Create a backend from files that are already on disk.
++    ///
++    /// The registry constructors above reach HuggingFace to fill these two paths in. An input
++    /// method that ships its own model has them already, and on a platform where the process has
++    /// no network access at all the download path cannot run regardless.
++    pub fn from_paths(gguf_path: &str, tokenizer_json_path: &str) -> Self {
++        Backend {
++            gguf_path: gguf_path.to_string(),
++            tokenizer_json_path: tokenizer_json_path.to_string(),
++            display_name: "custom".to_string(),
++        }
++    }
+ }
+ 
+ /// Kanji converter using llama.cpp backend

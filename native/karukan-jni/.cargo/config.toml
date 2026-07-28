@@ -1,0 +1,3 @@
+[target.aarch64-linux-android]
+linker = "/mnt/ssd4/ime/third_party/mozc/src/third_party/ndk/android-ndk-r29/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android24-clang"
+ar = "/mnt/ssd4/ime/third_party/mozc/src/third_party/ndk/android-ndk-r29/toolchains/llvm/prebuilt/linux-x86_64/bin/llvm-ar"

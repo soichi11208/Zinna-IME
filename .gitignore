@@ -19,3 +19,12 @@ local.properties
 
 # Kotlin compiler session files
 .kotlin/
+
+# karukan (experimental neural conversion)
+/third_party/karukan/
+/third_party/karukan-model/
+/third_party/karukan-libs/
+/native/karukan-jni/target/
+
+# Built APKs handed over for testing
+/dist/

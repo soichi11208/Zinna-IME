@@ -74,6 +74,20 @@ class ImeSettings(context: Context) {
         }
 
     /**
+     * Experimental: ask karukan's neural model for conversions alongside mozc's.
+     *
+     * Off by default and gated on a model having been bundled at build time. It runs a language
+     * model per conversion, so it is slow by the standards of everything else here — the point is
+     * accuracy, not speed.
+     */
+    var neuralConversion: Boolean
+        get() = prefs.getBoolean(KEY_NEURAL, false)
+        set(value) {
+            prefs.edit().putBoolean(KEY_NEURAL, value).apply()
+            bumpRevision()
+        }
+
+    /**
      * The keyboard background image, or null for a plain colour.
      *
      * A copy under our own files directory, not the content URI the user picked: the IME runs in a
@@ -121,6 +135,7 @@ class ImeSettings(context: Context) {
         private const val KEY_HEIGHT_SCALE = "key_height_scale"
         private const val KEY_KEYBOARD_STYLE = "keyboard_style"
         private const val KEY_FLICK_GUIDE = "flick_guide_style"
+        private const val KEY_NEURAL = "neural_conversion"
         const val DEFAULT_BACKGROUND_OPACITY = 0.45f
         const val MIN_KEY_HEIGHT_SCALE = 0.7f
         const val MAX_KEY_HEIGHT_SCALE = 1.5f

@@ -18,3 +18,4 @@ rootProject.name = "zinna-ime"
 
 include(":app")
 include(":mozc")
+include(":karukan")
