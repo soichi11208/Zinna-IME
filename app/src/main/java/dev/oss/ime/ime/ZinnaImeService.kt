@@ -332,37 +332,31 @@ class ZinnaImeService : InputMethodService() {
         }
         val info = currentInputEditorInfo
         val imeOptions = info?.imeOptions ?: 0
-        val action = imeOptions and EditorInfo.IME_MASK_ACTION
+        val inputType = info?.inputType ?: 0
+        val target = EnterRouting.targetFor(imeOptions, inputType)
 
-        // Only a field that can hold a newline gets one. Deciding this first is the whole fix: a
-        // search bar that never set imeOptions reports IME_ACTION_UNSPECIFIED, and treating that
-        // as "no action, so type a newline" stuffed a line break into a single-line box instead of
-        // searching.
-        if ((info?.inputType ?: 0) and EditorInfo.TYPE_TEXT_FLAG_MULTI_LINE != 0) {
-            ic.commitText("\n", 1)
-            return
+        // Logged because which branch a field lands in is not knowable from here — the descriptor
+        // is whatever the app chose to declare. When Enter misbehaves somewhere, this says why.
+        Log.d(TAG, "enter: imeOptions=0x${imeOptions.toString(16)} " +
+            "inputType=0x${inputType.toString(16)} -> $target")
+
+        when (target) {
+            EnterRouting.Target.ACTION ->
+                ic.performEditorAction(imeOptions and EditorInfo.IME_MASK_ACTION)
+
+            EnterRouting.Target.NEWLINE -> ic.commitText("\n", 1)
+
+            EnterRouting.Target.KEY_EVENT -> {
+                val now = android.os.SystemClock.uptimeMillis()
+                val enter = android.view.KeyEvent.KEYCODE_ENTER
+                ic.sendKeyEvent(
+                    android.view.KeyEvent(now, now, android.view.KeyEvent.ACTION_DOWN, enter, 0)
+                )
+                ic.sendKeyEvent(
+                    android.view.KeyEvent(now, now, android.view.KeyEvent.ACTION_UP, enter, 0)
+                )
+            }
         }
-
-        val wantsAction = action != EditorInfo.IME_ACTION_NONE &&
-            action != EditorInfo.IME_ACTION_UNSPECIFIED &&
-            imeOptions and EditorInfo.IME_FLAG_NO_ENTER_ACTION == 0
-
-        if (wantsAction) {
-            ic.performEditorAction(action)
-            return
-        }
-
-        // No action declared, but the field cannot take a newline either. Send a real Enter and let
-        // the editor do whatever it does with one — that is how a hardware keyboard reaches these
-        // fields, and it is what makes an unlabelled search box submit.
-        val now = android.os.SystemClock.uptimeMillis()
-        val enter = android.view.KeyEvent.KEYCODE_ENTER
-        ic.sendKeyEvent(
-            android.view.KeyEvent(now, now, android.view.KeyEvent.ACTION_DOWN, enter, 0)
-        )
-        ic.sendKeyEvent(
-            android.view.KeyEvent(now, now, android.view.KeyEvent.ACTION_UP, enter, 0)
-        )
     }
 
     private fun handleCursorMove(delta: Int) {
