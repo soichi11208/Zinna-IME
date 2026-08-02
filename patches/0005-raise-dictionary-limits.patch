@@ -1,0 +1,36 @@
+diff --git a/src/dictionary/user_dictionary_storage.cc b/src/dictionary/user_dictionary_storage.cc
+--- a/src/dictionary/user_dictionary_storage.cc
++++ b/src/dictionary/user_dictionary_storage.cc
+@@ -70,7 +70,11 @@
+ 
+ // The limits of dictionary/entry size.
+ constexpr size_t kMaxDictionarySize = 100;
+-constexpr size_t kMaxEntrySize = 1000000;
++// Raised from upstream's 1,000,000. The bundled Wikipedia-derived dictionary alone is over a
++// million entries, and splitting it across dictionaries to fit would put an arbitrary seam through
++// one body of words for no reason the user could see. The limit is a sanity bound rather than a
++// structural one — nothing downstream indexes entries by a fixed-width type.
++constexpr size_t kMaxEntrySize = 4000000;
+ 
+ // Default filename of user dictionary.
+ constexpr absl::string_view kUserDictionaryFile = "user://user_dictionary.db";
+diff --git a/src/storage/encrypted_string_storage.cc b/src/storage/encrypted_string_storage.cc
+index 76fd4cf74..6e11718b5 100644
+--- a/src/storage/encrypted_string_storage.cc
++++ b/src/storage/encrypted_string_storage.cc
+@@ -57,8 +57,13 @@ namespace {
+ // Salt size for encryption
+ constexpr size_t kSaltSize = 32;
+ 
+-// Maximum file size (64Mbyte)
+-constexpr size_t kMaxFileSize = 64 * 1024 * 1024;
++// Maximum file size.
++//
++// Raised from upstream's 64MB because the user dictionary now goes through this storage (see
++// dictionary/user_dictionary_storage.cc) and a bundled Wikipedia-derived dictionary is far larger
++// than anything a person would type by hand. Hitting the cap does not truncate — it refuses to
++// load the file at all — so the bound has to sit above the largest dictionary we ship.
++constexpr size_t kMaxFileSize = 512 * 1024 * 1024;
+ }  // namespace
+ 
+ bool EncryptedStringStorage::Load(std::string* output) const {

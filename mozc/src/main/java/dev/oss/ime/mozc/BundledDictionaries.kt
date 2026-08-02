@@ -28,6 +28,7 @@ object BundledDictionaries {
     private val DICTIONARIES = mapOf(
         "dic-nico-intersection-pixiv.txt" to "ニコニコ大百科×ピクシブ百科事典",
         "katakana-english.txt" to "カタカナ語→英語",
+    "jawiki.txt" to "Wikipedia 見出し",
     )
 
     data class Status(val name: String, val entryCount: Int)

@@ -62,3 +62,28 @@ if [[ "${ja_en_entries}" -lt 10000 ]]; then
 fi
 install -m 644 "${merged}" "${DEST}/${JA_EN_FILE}"
 echo "    ${ja_en_entries} entries -> ${DEST}/${JA_EN_FILE}"
+
+# utuhiro78/mozcdic-ut-jawiki — readings and surfaces harvested from the Japanese Wikipedia.
+# Distributed in mozc's *system* dictionary format (reading, lid, rid, cost, surface), and the lid,
+# rid and cost columns are placeholders that merge-ut-dictionaries fills in later — in the raw file
+# every one of them is 0000/0000/8000. So there is no part of speech to carry over; the entries are
+# overwhelmingly proper nouns and are imported as such.
+JAWIKI_URL="https://raw.githubusercontent.com/utuhiro78/mozcdic-ut-jawiki/main/mozcdic-ut-jawiki.txt.bz2"
+JAWIKI_FILE="jawiki.txt"
+
+echo "==> Fetching mozcdic-ut-jawiki"
+curl -fL --http1.1 --retry 5 --retry-delay 2 --progress-bar \
+  -o "${work}/jawiki.txt.bz2" "${JAWIKI_URL}"
+
+jawiki="${work}/jawiki.tsv"
+bunzip2 -c "${work}/jawiki.txt.bz2" |
+  awk -F"\t" 'NF >= 5 && $1 != "" && $5 != "" {print $1 "\t" $5 "\t" "名詞"}' |
+  sort -u > "${jawiki}"
+
+jawiki_entries="$(wc -l < "${jawiki}")"
+if [[ "${jawiki_entries}" -lt 500000 ]]; then
+  echo "error: only ${jawiki_entries} jawiki entries; refusing to install a truncated dictionary" >&2
+  exit 1
+fi
+install -m 644 "${jawiki}" "${DEST}/${JAWIKI_FILE}"
+echo "    ${jawiki_entries} entries -> ${DEST}/${JAWIKI_FILE}"

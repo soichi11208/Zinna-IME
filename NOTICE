@@ -37,6 +37,15 @@ Bundled supplementary dictionary:
   The dictionary data is under Creative Commons Attribution-ShareAlike 3.0, the
   same terms as EDICT itself.
 
+  mozcdic-ut-jawiki  (mozc/src/main/assets/dictionaries/)
+  https://github.com/utuhiro78/mozcdic-ut-jawiki
+  Readings and surface forms derived from the Japanese Wikipedia.
+  Licensed under Creative Commons Attribution-ShareAlike, the terms Wikipedia
+  content carries. The file shipped here is reformatted from the upstream
+  distribution — the part-of-speech, connection-id and cost columns are dropped,
+  since upstream leaves them as placeholders — and that reformatting is itself
+  distributed under the same terms. No entry text is altered.
+
   Those terms cover the dictionary, not software that uses it: the upstream
   project states explicitly that an application bundling this dictionary need
   not adopt a Creative Commons licence, and asks only that it say it uses this
