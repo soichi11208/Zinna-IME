@@ -29,10 +29,6 @@ class MozcEngine private constructor() {
     val dataVersion: String
         get() = synchronized(lock) { MozcJNI.getDataVersion() }
 
-    /** Bundled supplementary dictionaries already imported into mozc's user dictionary. */
-    fun installedDictionaries(context: Context): List<BundledDictionaries.Status> =
-        BundledDictionaries.installed(context)
-
     /** Creates a mozc session. Safe to call repeatedly; a live session is reused. */
     fun ensureSession(): Boolean = synchronized(lock) { ensureSessionLocked() }
 
@@ -155,15 +151,12 @@ class MozcEngine private constructor() {
             Log.i(TAG, "mozc up, data version=${MozcJNI.getDataVersion()}")
             val engine = MozcEngine()
 
-            // Off the caller's thread: this runs during the IME's first keystroke path, and the
-            // bundled dictionaries are several MB of TSV. mozc parses them on its own thread and
-            // enables the entries as soon as it is done, so nothing here needs to be waited on.
-            Thread({
-                BundledDictionaries.importIfNeeded(context, engine)
-                // Our TSV is the source of truth for the user's own words, so pushing it at start-up
-                // restores them even if mozc's profile was wiped underneath us.
-                UserDictionary(context).sync(engine)
-            }, "mozc-dict-import")
+            // Only the user's own words are pushed at start-up now. The bundled dictionaries used
+            // to be imported here as a user dictionary, which gave them mozc's user-dictionary cost
+            // advantage — enough of an advantage that six entries pushed 日本 out of first place for
+            // にほん. They live in the system dictionary instead; see
+            // scripts/gen_system_dictionary.py.
+            Thread({ UserDictionary(context).sync(engine) }, "mozc-user-dict")
                 .apply { isDaemon = true; priority = Thread.MIN_PRIORITY }
                 .start()
 

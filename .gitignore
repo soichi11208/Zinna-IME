@@ -28,3 +28,6 @@ local.properties
 
 # Built APKs handed over for testing
 /dist/
+
+# Dictionary sources for the system dictionary build
+/third_party/dictionaries/

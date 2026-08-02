@@ -249,11 +249,8 @@ class MozcSession(context: Context) {
         }
 
         val tiers = tiersById(reading)
-        val byId = raw.associateBy({ it.id }, { it.text })
         val (candidates, focused) = byTier(raw, focusedId) { id ->
-            val text = byId[id]
-            if (text != null && isTransliterationOf(text, reading)) CandidateTier.TRANSLITERATION
-            else tiers[id] ?: CandidateTier.MOZC_EXACT
+            tiers[id] ?: CandidateTier.MOZC_EXACT
         }
 
         return State(
@@ -279,17 +276,7 @@ internal enum class CandidateTier {
     MOZC_EXACT,
     DICTIONARY_EXACT,
     MOZC_PREDICTED,
-    DICTIONARY_PREDICTED,
-
-    /**
-     * The reading written out as-is, in hiragana or katakana.
-     *
-     * Last, ahead of nothing. These are not conversions — mozc offers them for every reading, and
-     * they match it exactly by construction, so ranking on exactness alone floated them over the
-     * actual conversions: にほん put ニホン above 日本, because on a mobile request 日本 comes back
-     * as a prediction while the transliteration does not.
-     */
-    TRANSLITERATION;
+    DICTIONARY_PREDICTED;
 
     companion object {
         fun of(exact: Boolean, fromDictionary: Boolean): CandidateTier = when {
@@ -301,16 +288,7 @@ internal enum class CandidateTier {
     }
 }
 
-/** Whether [text] is just [reading] rewritten, rather than converted. */
-internal fun isTransliterationOf(text: String, reading: String): Boolean {
-    if (reading.isEmpty() || text.length != reading.length) return false
-    return text == reading || text == toKatakana(reading)
-}
 
-/** Hiragana to katakana. The two blocks run in parallel 0x60 apart. */
-private fun toKatakana(kana: String): String = buildString(kana.length) {
-    for (c in kana) append(if (c in '\u3041'..'\u3096') c + 0x60 else c)
-}
 
 /**
  * Groups the candidates into [CandidateTier] bands, keeping the engine's order inside each.

@@ -45,6 +45,18 @@ if [[ -f "${ROOT}/patches/flick_geometry.inc" ]]; then
   install -m 644 "${ROOT}/patches/flick_geometry.inc" "${MOZC_SRC}/engine/flick_geometry.inc"
 fi
 
+# The bundled dictionaries go into the system dictionary, so they must be in place before bazel
+# reads the dictionary sources. Generated rather than committed: the inputs are fetched by
+# scripts/fetch_dictionaries.sh and are far too large to keep in the repository.
+if compgen -G "${ROOT}/third_party/dictionaries/*.txt" > /dev/null; then
+  echo "==> Generating dictionary10.txt from the bundled dictionaries"
+  "${PYTHON}" "${ROOT}/scripts/gen_system_dictionary.py" \
+    > "${MOZC_SRC}/data/dictionary_oss/dictionary10.txt"
+else
+  echo "==> No bundled dictionaries; writing an empty dictionary10.txt"
+  : > "${MOZC_SRC}/data/dictionary_oss/dictionary10.txt"
+fi
+
 if [[ ! -d third_party/ndk ]]; then
   echo "==> Fetching mozc build dependencies (Android NDK r29)"
   "${PYTHON}" build_tools/update_deps.py

@@ -1,13 +1,16 @@
 #!/usr/bin/env bash
 #
-# Downloads the bundled supplementary dictionaries into the :mozc module's assets.
+# Downloads the supplementary dictionaries that get baked into mozc.data.
 #
-# These are fetched at build time and shipped inside the APK — the app itself never touches the
-# network. Re-run to pick up a newer snapshot.
+# Fetched at build time and compiled into the system dictionary by scripts/build_mozc.sh; the app
+# itself never touches the network. Re-run to pick up a newer snapshot.
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-DEST="${ROOT}/mozc/src/main/assets/dictionaries"
+# Not under assets: these are no longer shipped in the APK. Since the migration to the system
+# dictionary they are inputs to scripts/gen_system_dictionary.py, which bakes them into mozc.data
+# before the native build.
+DEST="${ROOT}/third_party/dictionaries"
 
 # ncaq/dic-nico-intersection-pixiv — titles appearing in both Niconico Pedia and Pixiv
 # Encyclopedia, already in Mozc user-dictionary TSV format (reading / word / part-of-speech).

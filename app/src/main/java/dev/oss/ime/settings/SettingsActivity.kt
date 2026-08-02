@@ -374,12 +374,11 @@ private fun InfoCard(title: String, body: String) {
  * The bundled dictionaries import in the background on first run, so this doubles as the way to
  * tell "not imported yet" from "imported and empty" without digging through logcat.
  */
-private fun describeDictionaries(context: Context): String {
-    val engine = MozcEngine.get(context) ?: return "—"
-    val installed = engine.installedDictionaries(context)
-    if (installed.isEmpty()) return "読み込み中… (初回起動時にバックグラウンドで取り込みます)"
-    return installed.joinToString("\n") { "${it.name}  ${"%,d".format(it.entryCount)} 語" }
-}
+private fun describeDictionaries(context: Context): String =
+    // Baked into mozc.data at build time rather than imported at runtime, so there is no state to
+    // report — either the engine loaded or it did not.
+    if (MozcEngine.get(context) == null) "—"
+    else "ニコニコ大百科×ピクシブ百科事典 / カタカナ語→英語 / Wikipedia 見出し"
 
 private fun describeEngine(context: Context): String {
     val engine = MozcEngine.get(context)
