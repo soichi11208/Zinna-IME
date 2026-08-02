@@ -156,7 +156,12 @@ class MozcEngine private constructor() {
             // advantage — enough of an advantage that six entries pushed 日本 out of first place for
             // にほん. They live in the system dictionary instead; see
             // scripts/gen_system_dictionary.py.
-            Thread({ UserDictionary(context).sync(engine) }, "mozc-user-dict")
+            Thread({
+                UserDictionary(context).run {
+                    dropLegacyBundledDictionaries(engine)
+                    sync(engine)
+                }
+            }, "mozc-user-dict")
                 .apply { isDaemon = true; priority = Thread.MIN_PRIORITY }
                 .start()
 

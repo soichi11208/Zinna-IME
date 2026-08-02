@@ -92,6 +92,39 @@ class UserDictionary(context: Context) {
     }
 
     /**
+     * Removes the bundled dictionaries that older versions imported here.
+     *
+     * They live in the system dictionary now, but the move only stopped writing them — it could not
+     * take back what was already on the device, because [Input.CommandType.IMPORT_USER_DICTIONARY]
+     * replaces one dictionary by name and these carry names of their own. Left alone they keep the
+     * user-dictionary cost bonus, which is large enough to put カタカナ from a Wikipedia heading
+     * above the ordinary word someone was reaching for.
+     *
+     * An empty payload drops a dictionary, and dropping one that was never there is not an error, so
+     * this needs no record of which version installed what.
+     *
+     * Repeated on every start rather than stamped as done once. The import is asynchronous — the
+     * call returns as soon as the request is queued, and nothing reports back — so a stamp would
+     * record that the work was *requested*, and an app killed before the queue drained would carry
+     * the dictionaries forever while claiming to have removed them. That is likeliest right after an
+     * update, which is the only moment this matters. Repeating costs nothing: [sync] already makes
+     * the same pass load and save the storage on every start.
+     */
+    fun dropLegacyBundledDictionaries(engine: MozcEngine) {
+        for (name in LEGACY_DICTIONARY_NAMES) {
+            engine.eval(
+                Input.newBuilder()
+                    .setType(Input.CommandType.IMPORT_USER_DICTIONARY)
+                    .setUserDictionaryImportData(
+                        UserDictionaryImportData.newBuilder()
+                            .setDictionaryName(name)
+                            .setData("")
+                    )
+            ) ?: Log.e(TAG, "could not drop legacy dictionary $name")
+        }
+    }
+
+    /**
      * TSV has no escapes, so a tab or newline in a field would silently shift every later column.
      * Strip them rather than rejecting the edit — the user meant the text, not the whitespace.
      */
@@ -111,6 +144,19 @@ class UserDictionary(context: Context) {
         const val DICTIONARY_NAME = "ユーザー辞書"
 
         const val DEFAULT_POS = "名詞"
+
+        /**
+         * What the bundled dictionaries were called while they lived in the user dictionary.
+         *
+         * Every name any released version ever used: they were introduced together and removed
+         * together, and none was renamed in between, so nothing else can be out there under a name
+         * this list misses.
+         */
+        private val LEGACY_DICTIONARY_NAMES = listOf(
+            "ニコニコ大百科×ピクシブ百科事典",
+            "カタカナ語→英語",
+            "Wikipedia 見出し",
+        )
 
         /**
          * Part-of-speech names mozc accepts in TSV, in the order its own proto declares them —

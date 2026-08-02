@@ -211,19 +211,33 @@ class MozcSession(context: Context) {
     /**
      * Sorts every displayed candidate into one of [CandidateTier]'s buckets.
      *
-     * Two facts come out of `all_candidate_words`, which lists every candidate the engine built:
-     * `key` is set only when the candidate's reading differs from what was typed, and the
+     * Three facts come out of `all_candidate_words`, which lists every candidate the engine built:
+     * `key` is set only when the candidate's reading differs from what was typed, the
      * USER_DICTIONARY attribute marks the ones that came from words the user supplied rather than
-     * from the system dictionary. Neither is available from the displayed list on its own.
+     * from the system dictionary, and TYPING_CORRECTION marks a reading the engine believes was
+     * mistyped. None of the three is available from the displayed list on its own.
+     *
+     * A correction carries a different reading too, but it is not a prediction about text still to
+     * come — it is a reading of what was already typed, under the belief that a key was missed. It
+     * gets a band of its own between the two. Sorting it with the predictions put 漢字 for かゆじ
+     * below every literal reading of the typo, 粥じ and 痒じ included, far enough down to be
+     * invisible; exempting it from the bands altogether went too far the other way, and 死後の rose
+     * to second place for a correctly typed しごと.
      */
     private fun Output.tiersById(reading: String): Map<Int, CandidateTier> {
         if (!hasAllCandidateWords()) return emptyMap()
         val tiers = HashMap<Int, CandidateTier>()
         for (word in allCandidateWords.candidatesList) {
+            val corrected =
+                word.attributesList.contains(CandidateAttribute.TYPING_CORRECTION)
             val extends = word.hasKey() && word.key != reading
             val fromDictionary =
                 word.attributesList.contains(CandidateAttribute.USER_DICTIONARY)
-            tiers[word.id] = CandidateTier.of(exact = !extends, fromDictionary = fromDictionary)
+            tiers[word.id] = CandidateTier.of(
+                exact = !extends,
+                fromDictionary = fromDictionary,
+                corrected = corrected,
+            )
         }
         return tiers
     }
@@ -267,21 +281,29 @@ class MozcSession(context: Context) {
 /**
  * Where a candidate belongs in the strip, best band first.
  *
- * Two questions decide it, in this order. Does the candidate convert exactly what was typed, or is
- * it a prediction about text still to come? And did it come from the system dictionary or from a
+ * Three questions decide it, in this order. Does the candidate convert exactly what was typed, or is
+ * it a prediction about text still to come? Failing that, is it a correction — a reading of what was
+ * typed on the belief that a key was missed? And did it come from the system dictionary or from a
  * word the user supplied? Exactness dominates: a guess about an unfinished word is never what
- * someone reaching for a finished one wants, however good the source.
+ * someone reaching for a finished one wants, however good the source. A correction sits between the
+ * two, because whoever typed cleanly wants none of it and whoever mistyped wants nothing else.
  */
 internal enum class CandidateTier {
     MOZC_EXACT,
     DICTIONARY_EXACT,
+    TYPING_CORRECTION,
     MOZC_PREDICTED,
     DICTIONARY_PREDICTED;
 
     companion object {
-        fun of(exact: Boolean, fromDictionary: Boolean): CandidateTier = when {
+        fun of(
+            exact: Boolean,
+            fromDictionary: Boolean,
+            corrected: Boolean = false,
+        ): CandidateTier = when {
             exact && !fromDictionary -> MOZC_EXACT
             exact -> DICTIONARY_EXACT
+            corrected -> TYPING_CORRECTION
             !fromDictionary -> MOZC_PREDICTED
             else -> DICTIONARY_PREDICTED
         }

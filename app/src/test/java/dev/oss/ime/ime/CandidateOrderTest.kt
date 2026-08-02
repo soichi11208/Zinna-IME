@@ -7,7 +7,8 @@ import org.junit.Test
 
 /**
  * The wanted order is: exact conversions from mozc, then exact ones from the user's dictionaries,
- * then mozc's predictions, then the dictionaries' predictions.
+ * then corrections of a mistyped reading, then mozc's predictions, then the dictionaries'
+ * predictions.
  */
 class CandidateOrderTest {
 
@@ -28,6 +29,27 @@ class CandidateOrderTest {
         assertEquals(
             CandidateTier.DICTIONARY_PREDICTED,
             CandidateTier.of(exact = false, fromDictionary = true),
+        )
+    }
+
+    @Test
+    fun correctionsSitBetweenExactMatchesAndPredictions() {
+        assertEquals(
+            CandidateTier.TYPING_CORRECTION,
+            CandidateTier.of(exact = false, fromDictionary = false, corrected = true),
+        )
+        assertEquals(
+            CandidateTier.TYPING_CORRECTION,
+            CandidateTier.of(exact = false, fromDictionary = true, corrected = true),
+        )
+        // An exact match is never demoted to make room for a correction of the same reading.
+        assertEquals(
+            CandidateTier.MOZC_EXACT,
+            CandidateTier.of(exact = true, fromDictionary = false, corrected = true),
+        )
+        assertTrue(
+            CandidateTier.DICTIONARY_EXACT < CandidateTier.TYPING_CORRECTION &&
+                CandidateTier.TYPING_CORRECTION < CandidateTier.MOZC_PREDICTED
         )
     }
 

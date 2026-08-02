@@ -64,10 +64,10 @@ index 4219f6cf5..0df8d0125 100644
    }
 diff --git a/src/engine/typing_correction_model.cc b/src/engine/typing_correction_model.cc
 new file mode 100644
-index 000000000..171ceda4a
+index 000000000..f494b69d2
 --- /dev/null
 +++ b/src/engine/typing_correction_model.cc
-@@ -0,0 +1,239 @@
+@@ -0,0 +1,250 @@
 +#include "engine/typing_correction_model.h"
 +
 +#include <algorithm>
@@ -112,8 +112,19 @@ index 000000000..171ceda4a
 +// its own eight alternatives and nothing is left for a dropped っ or for the kana before it.
 +constexpr size_t kMaxNeighboursPerPosition = 8;
 +
-+// Penalty in the caller's log10 domain: bias is multiplied by -1150 and added to the word cost.
-+// A vowel slip is the single most common flick mistake, so it is charged least.
++// Penalty in the caller's log10 domain. The caller computes `wcost += -1150 * bias`, and its own
++// comment reads "bias = hyp_score - base_score, so larger is better" — so a negative value here is
++// a penalty and a positive one a discount.
++//
++// A penalty looks wrong for a correction and is not. Turning these positive was measured and cost
++// nothing but accuracy: mozc pins the literal conversion of whatever was typed to the top slot, so
++// no discount can win first place — corrections reach second at best either way — while on
++// correctly typed input the discount pulled 死後の above everything for しごと and 対戦 above 大変
++// for たいへん. What buys rank on a typo is not cost but staying out of the band that holds
++// predictions back; see CandidateTier in MozcSession.kt.
++//
++// So these only order corrections among themselves. A vowel slip is the commonest flick mistake, so
++// it is charged least.
 +constexpr float kVowelSlipBias = -0.25f;
 +
 +// Distance decides *which* hypotheses are worth spending the budget on; it deliberately barely
