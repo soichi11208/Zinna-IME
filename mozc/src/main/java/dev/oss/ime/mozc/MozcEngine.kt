@@ -50,14 +50,19 @@ class MozcEngine private constructor() {
      * Sends a SEND_KEY input. [keyEvent] carries the reading produced by the input method — for
      * flick input that is the resolved kana, not the physical key.
      */
-    fun sendKey(keyEvent: ProtoCommandsKeyEvent): Output? = synchronized(lock) {
+    fun sendKey(
+        keyEvent: ProtoCommandsKeyEvent,
+        clientContext: org.mozc.android.inputmethod.japanese.protobuf.ProtoCommands.Context? = null,
+    ): Output? = synchronized(lock) {
         if (!ensureSessionLocked()) return null
-        evalLocked(
-            Input.newBuilder()
-                .setType(Input.CommandType.SEND_KEY)
-                .setId(sessionId)
-                .setKey(keyEvent)
-        )
+        val input = Input.newBuilder()
+            .setType(Input.CommandType.SEND_KEY)
+            .setId(sessionId)
+            .setKey(keyEvent)
+        // mozc reads this on the transition into composing and rebuilds its history segments from
+        // the text to the left; see MozcSession.clientContext.
+        if (clientContext != null) input.context = clientContext
+        evalLocked(input)
     }
 
     /** Sends a session command such as SUBMIT, REVERT, or candidate selection. */

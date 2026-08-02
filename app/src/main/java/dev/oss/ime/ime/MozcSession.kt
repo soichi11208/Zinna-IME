@@ -4,7 +4,9 @@ import android.content.Context
 import dev.oss.ime.keyboard.InputStyle
 import dev.oss.ime.mozc.MozcEngine
 import org.mozc.android.inputmethod.japanese.protobuf.ProtoConfig.Config
+import org.mozc.android.inputmethod.japanese.protobuf.ProtoCandidateWindow.CandidateAttribute
 import org.mozc.android.inputmethod.japanese.protobuf.ProtoCommands.CompositionMode
+import org.mozc.android.inputmethod.japanese.protobuf.ProtoCommands.Context as MozcContext
 import org.mozc.android.inputmethod.japanese.protobuf.ProtoCommands.Input
 import org.mozc.android.inputmethod.japanese.protobuf.ProtoCommands.KeyEvent
 import org.mozc.android.inputmethod.japanese.protobuf.ProtoCommands.Output
@@ -51,6 +53,17 @@ class MozcSession(context: Context) {
 
     private var currentStyle: InputStyle? = null
     private var configApplied = false
+
+    /**
+     * What the editor looks like around the cursor, handed to mozc with every key.
+     *
+     * mozc reconstructs history segments from `preceding_text` when a composition starts, and ranks
+     * with them — which is how it knows that に after "main" is the particle rather than 二. Without
+     * this it converts every phrase from a standing start; see ZinnaImeService.refreshClientContext.
+     *
+     * It also carries the field type, so mozc can behave itself in a password box.
+     */
+    var clientContext: MozcContext? = null
 
     fun applyInputStyle(style: InputStyle) {
         if (style == currentStyle) return
@@ -111,11 +124,12 @@ class MozcSession(context: Context) {
         } else {
             key.keyString = text
         }
-        return engine?.sendKey(key.build())?.toState()
+        return engine?.sendKey(key.build(), clientContext)?.toState()
     }
 
     fun sendSpecialKey(specialKey: KeyEvent.SpecialKey): State? =
-        engine?.sendKey(KeyEvent.newBuilder().setSpecialKey(specialKey).build())?.toState()
+        engine?.sendKey(KeyEvent.newBuilder().setSpecialKey(specialKey).build(), clientContext)
+            ?.toState()
 
     /**
      * Turns on the two correction features. Both are AND-ed with the Request flags above and both
@@ -185,31 +199,23 @@ class MozcSession(context: Context) {
         engine?.sendCommand(SessionCommand.newBuilder().setType(type).build())?.toState()
 
     /**
-     * Whether candidate [id] is for a reading other than the one being typed.
+     * Sorts every displayed candidate into one of [CandidateTier]'s buckets.
      *
-     * See [exactReadingFirst] for what is done with the answer.
-     *
-     * mozc's mobile prediction mixes two kinds of candidate into one list: conversions of exactly
-     * what was typed, and predictions that assume more typing to come. It ranks them together by
-     * cost, so a prediction routinely outranks the plain conversion — typing でんわ offers 電話番号
-     * above 電話, and あり offers ありだと above あり. That is useful when it guesses right and a
-     * nuisance when the word was already finished, which is the common case.
-     *
-     * `CandidateWord.key` is set exactly when the candidate's reading differs from the composition
-     * (it covers both longer readings like でんわばんごう and shorter partial ones like こんにち),
-     * so it is the signal for pushing those below the exact matches.
+     * Two facts come out of `all_candidate_words`, which lists every candidate the engine built:
+     * `key` is set only when the candidate's reading differs from what was typed, and the
+     * USER_DICTIONARY attribute marks the ones that came from words the user supplied rather than
+     * from the system dictionary. Neither is available from the displayed list on its own.
      */
-    private fun Output.idsExtendingReading(reading: String): Set<Int> {
-        if (!hasAllCandidateWords()) return emptySet()
-        var ids: MutableSet<Int>? = null
+    private fun Output.tiersById(reading: String): Map<Int, CandidateTier> {
+        if (!hasAllCandidateWords()) return emptyMap()
+        val tiers = HashMap<Int, CandidateTier>()
         for (word in allCandidateWords.candidatesList) {
-            if (word.hasKey() && word.key != reading) {
-                (ids ?: HashSet<Int>().also { ids = it }).add(word.id)
-            }
+            val extends = word.hasKey() && word.key != reading
+            val fromDictionary =
+                word.attributesList.contains(CandidateAttribute.USER_DICTIONARY)
+            tiers[word.id] = CandidateTier.of(exact = !extends, fromDictionary = fromDictionary)
         }
-        // Usually every candidate is an exact match and there is nothing to move; allocating
-        // nothing in that case keeps the common keystroke free.
-        return ids ?: emptySet()
+        return tiers
     }
 
     private fun Output.toState(): State {
@@ -232,8 +238,10 @@ class MozcSession(context: Context) {
             null
         }
 
-        val extending = idsExtendingReading(reading)
-        val (candidates, focused) = exactReadingFirst(raw, focusedId, extending::contains)
+        val tiers = tiersById(reading)
+        val (candidates, focused) = byTier(raw, focusedId) { id ->
+            tiers[id] ?: CandidateTier.MOZC_EXACT
+        }
 
         return State(
             committedText = if (hasResult()) result.value else "",
@@ -247,11 +255,35 @@ class MozcSession(context: Context) {
 }
 
 /**
- * Moves the candidates that convert exactly what was typed ahead of the predictions.
+ * Where a candidate belongs in the strip, best band first.
  *
- * A stable partition, not a re-ranking: mozc's order within each group is left alone, because it
- * is the product of a language model this has no business second-guessing. All this decides is
- * that a finished word beats a guess about an unfinished one.
+ * Two questions decide it, in this order. Does the candidate convert exactly what was typed, or is
+ * it a prediction about text still to come? And did it come from the system dictionary or from a
+ * word the user supplied? Exactness dominates: a guess about an unfinished word is never what
+ * someone reaching for a finished one wants, however good the source.
+ */
+internal enum class CandidateTier {
+    MOZC_EXACT,
+    DICTIONARY_EXACT,
+    MOZC_PREDICTED,
+    DICTIONARY_PREDICTED;
+
+    companion object {
+        fun of(exact: Boolean, fromDictionary: Boolean): CandidateTier = when {
+            exact && !fromDictionary -> MOZC_EXACT
+            exact -> DICTIONARY_EXACT
+            !fromDictionary -> MOZC_PREDICTED
+            else -> DICTIONARY_PREDICTED
+        }
+    }
+}
+
+/**
+ * Groups the candidates into [CandidateTier] bands, keeping the engine's order inside each.
+ *
+ * A stable partition, not a re-ranking: the order within a band is the product of a language model
+ * and this user's own learning, which this has no business second-guessing. All it decides is which
+ * band comes first.
  *
  * Split out from the proto handling so the focus arithmetic can be tested — the focused index
  * points at a slot, and once the list is reordered that slot holds something else.
@@ -259,15 +291,14 @@ class MozcSession(context: Context) {
  * @param focusedId the id of the focused candidate, or null when nothing is focused
  * @return the reordered list and the index the focus moved to, or -1 for none
  */
-internal fun exactReadingFirst(
+internal fun byTier(
     candidates: List<MozcSession.Candidate>,
     focusedId: Int?,
-    extendsReading: (Int) -> Boolean,
+    tierOf: (Int) -> CandidateTier,
 ): Pair<List<MozcSession.Candidate>, Int> {
-    // Nothing to move is the usual case, and sorting would still copy the whole list.
     val ordered =
-        if (candidates.none { extendsReading(it.id) }) candidates
-        else candidates.sortedBy { if (extendsReading(it.id)) 1 else 0 }
+        if (candidates.size < 2) candidates
+        else candidates.sortedBy { tierOf(it.id).ordinal }
     val focused = focusedId?.let { id -> ordered.indexOfFirst { it.id == id } } ?: -1
     return ordered to focused
 }

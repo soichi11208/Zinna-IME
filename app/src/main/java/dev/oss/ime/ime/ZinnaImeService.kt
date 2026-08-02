@@ -27,6 +27,7 @@ import dev.oss.ime.keyboard.LayoutRepository
 import dev.oss.ime.settings.ImeSettings
 import dev.oss.ime.theme.KeyboardTheme
 import dev.oss.ime.theme.MaterialYouTheme
+import org.mozc.android.inputmethod.japanese.protobuf.ProtoCommands.Context as MozcContext
 import org.mozc.android.inputmethod.japanese.protobuf.ProtoCommands.KeyEvent
 
 /**
@@ -61,6 +62,16 @@ class ZinnaImeService : InputMethodService() {
 
     /** The table key the previous keystroke sent, for [endTogglingIfRepeat]. */
     private var lastTableKey: String? = null
+
+    /**
+     * Whether [MozcSession.clientContext] still describes where the cursor actually is.
+     *
+     * Reading the text around the cursor is a round trip to the edited app, so it is not something
+     * to do per keystroke. It only has to be right when a composition *starts* — that is the moment
+     * mozc rebuilds its history from it — and the cursor cannot move under us while one is in
+     * progress without [onUpdateSelection] saying so.
+     */
+    private var clientContextValid = false
 
     /** Experimental neural conversion, null unless the setting is on and a model was bundled. */
     private var neural: NeuralCandidates? = null
@@ -199,6 +210,7 @@ class ZinnaImeService : InputMethodService() {
         }
         if (!restarting) session.resetContext()
         lastTableKey = null
+        clientContextValid = false
         isComposing = false
         // The only moment an input method is allowed to read the clipboard is while it is the
         // active one, which is exactly now.
@@ -214,6 +226,36 @@ class ZinnaImeService : InputMethodService() {
     override fun onConfigurationChanged(newConfig: android.content.res.Configuration) {
         super.onConfigurationChanged(newConfig)
         setInputView(onCreateInputView())
+    }
+
+    /**
+     * The cursor moved, or the app changed the text under us.
+     *
+     * Two things go stale at once: what mozc was told is to the left of the cursor, and our own
+     * belief that a composition is in progress. Neither survives the editor being edited by anyone
+     * but us, and a composition that the app has already dropped must not keep Backspace routed
+     * into mozc.
+     */
+    override fun onUpdateSelection(
+        oldSelStart: Int,
+        oldSelEnd: Int,
+        newSelStart: Int,
+        newSelEnd: Int,
+        candidatesStart: Int,
+        candidatesEnd: Int,
+    ) {
+        super.onUpdateSelection(
+            oldSelStart, oldSelEnd, newSelStart, newSelEnd, candidatesStart, candidatesEnd,
+        )
+        clientContextValid = false
+        // candidatesStart < 0 means the editor is no longer showing a composing region.
+        if (candidatesStart < 0 && isComposing) {
+            session.resetContext()
+            isComposing = false
+            lastTableKey = null
+            neuralTexts = emptyList()
+            showIdleActions()
+        }
     }
 
     override fun onFinishInput() {
@@ -234,6 +276,7 @@ class ZinnaImeService : InputMethodService() {
     private fun onKeyOutput(output: KeyOutput, key: KeySpec, direction: FlickDirection) {
         when (val action = output.action) {
             is KeyAction.Input -> {
+                refreshClientContext()
                 endTogglingIfRepeat(action.text)
                 render(session.sendText(action.text))
                 lastTableKey = action.text
@@ -277,6 +320,51 @@ class ZinnaImeService : InputMethodService() {
         }
         // Anything that is not a character ends the run, so the key after it starts a new one.
         if (output.action !is KeyAction.Input) lastTableKey = null
+    }
+
+    /**
+     * Tells mozc what is to the left of the cursor, so it can convert in context.
+     *
+     * mozc turns `preceding_text` into history segments the moment a composition begins, and ranks
+     * against them. That is the difference between "main" + にまーじしました coming out as
+     * mainにマージしました and as main二マージしました — without it every phrase is converted from a
+     * standing start, and a short particle loses to whatever homophone has the better unigram cost.
+     *
+     * Only refreshed when no composition is in progress: that is the only moment mozc reads it, and
+     * `getTextBeforeCursor` is an IPC round trip to the app being typed into.
+     *
+     * Password fields get the type but no text. mozc adjusts its own behaviour for them, and the
+     * contents of a password box are not something to feed a converter that learns.
+     */
+    private fun refreshClientContext() {
+        if (clientContextValid && isComposing) return
+
+        val info = currentInputEditorInfo
+        val password = isPasswordField(info?.inputType ?: 0)
+        val builder = MozcContext.newBuilder().setInputFieldType(
+            if (password) MozcContext.InputFieldType.PASSWORD else MozcContext.InputFieldType.NORMAL
+        )
+        if (!password) {
+            val before = currentInputConnection?.getTextBeforeCursor(PRECEDING_TEXT_CHARS, 0)
+            if (!before.isNullOrEmpty()) builder.precedingText = before.toString()
+        }
+        session.clientContext = builder.build()
+        clientContextValid = true
+    }
+
+    /**
+     * mozc must not see, learn from, or convert with what is typed into a password box. The four
+     * variations below are every way Android says "this is a password".
+     */
+    private fun isPasswordField(inputType: Int): Boolean {
+        val variation = inputType and EditorInfo.TYPE_MASK_VARIATION
+        return when (inputType and EditorInfo.TYPE_MASK_CLASS) {
+            EditorInfo.TYPE_CLASS_TEXT -> variation == EditorInfo.TYPE_TEXT_VARIATION_PASSWORD ||
+                variation == EditorInfo.TYPE_TEXT_VARIATION_VISIBLE_PASSWORD ||
+                variation == EditorInfo.TYPE_TEXT_VARIATION_WEB_PASSWORD
+            EditorInfo.TYPE_CLASS_NUMBER -> variation == EditorInfo.TYPE_NUMBER_VARIATION_PASSWORD
+            else -> false
+        }
     }
 
     /**
@@ -595,5 +683,11 @@ class ZinnaImeService : InputMethodService() {
 
         /** How much of a clipping fits on a chip before it stops being readable. */
         private const val CLIP_LABEL_LIMIT = 24
+
+        /**
+         * How much text to the left mozc is given. It only takes the last connective token out of
+         * this, so a short window is enough and keeps the round trip small.
+         */
+        private const val PRECEDING_TEXT_CHARS = 64
     }
 }

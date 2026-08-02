@@ -4,63 +4,90 @@ import org.junit.Assert.assertEquals
 import org.junit.Test
 
 /**
- * The cases here are real candidate lists from mozc, captured against the bundled dictionary, so
- * the expectations are what the user actually sees rather than invented examples.
+ * The wanted order is: exact conversions from mozc, then exact ones from the user's dictionaries,
+ * then mozc's predictions, then the dictionaries' predictions.
  */
 class CandidateOrderTest {
 
     private fun candidates(vararg text: String) =
         text.mapIndexed { i, t -> MozcSession.Candidate(i, t) }
 
-    /** でんわ offered 電話番号 above 電話 — the complaint that prompted this. */
+    private fun order(
+        raw: List<MozcSession.Candidate>,
+        tiers: Map<Int, CandidateTier>,
+        focusedId: Int? = null,
+    ) = byTier(raw, focusedId) { tiers[it] ?: CandidateTier.MOZC_EXACT }
+
     @Test
-    fun predictionsSinkBelowExactConversions() {
-        val raw = candidates("電話番号", "電話", "でんわ", "℡")
-        val extends = setOf(0)
-        val (ordered, _) = exactReadingFirst(raw, null) { it in extends }
-        assertEquals(listOf("電話", "でんわ", "℡", "電話番号"), ordered.map { it.text })
+    fun tierIsDecidedByExactnessThenSource() {
+        assertEquals(CandidateTier.MOZC_EXACT, CandidateTier.of(exact = true, fromDictionary = false))
+        assertEquals(CandidateTier.DICTIONARY_EXACT, CandidateTier.of(exact = true, fromDictionary = true))
+        assertEquals(CandidateTier.MOZC_PREDICTED, CandidateTier.of(exact = false, fromDictionary = false))
+        assertEquals(
+            CandidateTier.DICTIONARY_PREDICTED,
+            CandidateTier.of(exact = false, fromDictionary = true),
+        )
     }
 
-    /** Within each group mozc's own ranking has to survive untouched. */
+    /** All four bands present and arriving in the worst possible order. */
     @Test
-    fun orderInsideEachGroupIsPreserved() {
-        val raw = candidates("ありだと", "アリ", "ありそうで", "あり", "有り", "蟻")
-        val extends = setOf(0, 2)
-        val (ordered, _) = exactReadingFirst(raw, null) { it in extends }
-        assertEquals(
-            listOf("アリ", "あり", "有り", "蟻", "ありだと", "ありそうで"),
-            ordered.map { it.text },
+    fun bandsComeOutInOrder() {
+        val raw = candidates("辞書予測", "mozc予測", "辞書一致", "mozc一致")
+        val tiers = mapOf(
+            0 to CandidateTier.DICTIONARY_PREDICTED,
+            1 to CandidateTier.MOZC_PREDICTED,
+            2 to CandidateTier.DICTIONARY_EXACT,
+            3 to CandidateTier.MOZC_EXACT,
         )
+        val (ordered, _) = order(raw, tiers)
+        assertEquals(listOf("mozc一致", "辞書一致", "mozc予測", "辞書予測"), ordered.map { it.text })
+    }
+
+    /** The complaint that prompted this: a prediction sitting at the top. */
+    @Test
+    fun predictionsNeverOutrankAnExactConversion() {
+        val raw = candidates("電話番号", "電話", "でんわ")
+        val tiers = mapOf(0 to CandidateTier.MOZC_PREDICTED)
+        val (ordered, _) = order(raw, tiers)
+        assertEquals(listOf("電話", "でんわ", "電話番号"), ordered.map { it.text })
+    }
+
+    /** A dictionary word that converts exactly still beats anything merely predicted. */
+    @Test
+    fun exactDictionaryWordBeatsMozcPrediction() {
+        val raw = candidates("予測", "ユーザー語")
+        val tiers = mapOf(
+            0 to CandidateTier.MOZC_PREDICTED,
+            1 to CandidateTier.DICTIONARY_EXACT,
+        )
+        val (ordered, _) = order(raw, tiers)
+        assertEquals(listOf("ユーザー語", "予測"), ordered.map { it.text })
+    }
+
+    @Test
+    fun orderInsideEachBandIsPreserved() {
+        val raw = candidates("アリ", "あり", "有り", "蟻")
+        val (ordered, _) = order(raw, emptyMap())
+        assertEquals(raw.map { it.text }, ordered.map { it.text })
     }
 
     @Test
     fun focusFollowsItsCandidateToTheNewIndex() {
         val raw = candidates("電話番号", "電話", "でんわ")
-        val extends = setOf(0)
-        // Focus is on 電話番号, which moves from slot 0 to the end.
-        val (ordered, focused) = exactReadingFirst(raw, focusedId = 0) { it in extends }
+        val (ordered, focused) = order(raw, mapOf(0 to CandidateTier.MOZC_PREDICTED), focusedId = 0)
         assertEquals(2, focused)
         assertEquals("電話番号", ordered[focused].text)
     }
 
     @Test
     fun noFocusStaysNoFocus() {
-        val (_, focused) = exactReadingFirst(candidates("あ", "い"), null) { false }
+        val (_, focused) = order(candidates("あ", "い"), emptyMap())
         assertEquals(-1, focused)
     }
 
-    /** Zero-query suggestions have no reading at all, so nothing is exact and nothing moves. */
     @Test
-    fun allPredictionsKeepMozcOrder() {
-        val raw = candidates("おはよう", "お疲れ様", "ありがとう")
-        val (ordered, _) = exactReadingFirst(raw, null) { true }
-        assertEquals(raw.map { it.text }, ordered.map { it.text })
-    }
-
-    @Test
-    fun emptyListIsHandled() {
-        val (ordered, focused) = exactReadingFirst(emptyList(), null) { true }
-        assertEquals(emptyList<MozcSession.Candidate>(), ordered)
-        assertEquals(-1, focused)
+    fun emptyAndSingleListsAreHandled() {
+        assertEquals(emptyList<MozcSession.Candidate>(), order(emptyList(), emptyMap()).first)
+        assertEquals(1, order(candidates("あ"), emptyMap()).first.size)
     }
 }

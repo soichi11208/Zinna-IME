@@ -1,7 +1,7 @@
 diff --git a/src/android/jni/mozcjni.cc b/src/android/jni/mozcjni.cc
 --- a/src/android/jni/mozcjni.cc
 +++ b/src/android/jni/mozcjni.cc
-@@ -59,6 +59,42 @@
+@@ -59,6 +59,47 @@
  // The global instance of Mozc system to be initialized in onPostLoad().
  std::unique_ptr<SessionHandler> g_session_handler;
  
@@ -31,6 +31,10 @@ diff --git a/src/android/jni/mozcjni.cc b/src/android/jni/mozcjni.cc
 +    const bool had_key = word.has_key();
 +    const auto id = word.id();
 +    std::string key = word.key();
++    // Attributes are kept: USER_DICTIONARY is how the client tells a word the user supplied from
++    // one the system dictionary produced, which it needs to rank them apart. They are a handful of
++    // enum values, so they cost nothing next to the values and annotations being dropped.
++    const auto attributes = word.attributes();
 +    word.Clear();
 +    if (had_id) {
 +      word.set_id(id);
@@ -38,13 +42,14 @@ diff --git a/src/android/jni/mozcjni.cc b/src/android/jni/mozcjni.cc
 +    if (had_key) {
 +      word.set_key(std::move(key));
 +    }
++    *word.mutable_attributes() = attributes;
 +  }
 +}
 +
  // Concrete implementation for MozcJni.evalCommand
  jbyteArray JNICALL evalCommand(JNIEnv* env, jclass clazz,
                                 jbyteArray in_bytes_array) {
-@@ -68,6 +104,9 @@
+@@ -68,6 +109,9 @@
    command.ParseFromArray(in_bytes, in_size);
    if (g_session_handler) {
      g_session_handler->EvalCommand(&command);

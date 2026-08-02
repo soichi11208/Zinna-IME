@@ -1,0 +1,250 @@
+diff --git a/src/converter/history_reconstructor.cc b/src/converter/history_reconstructor.cc
+index af5a65a65..85b58d5d9 100644
+--- a/src/converter/history_reconstructor.cc
++++ b/src/converter/history_reconstructor.cc
+@@ -54,7 +54,8 @@ namespace {
+ //   - "x  " -> false
+ //   - "C60" -> "60" / NUMBER
+ //   - "200x" -> "x" / ALPHABET
+-//   (currently only NUMBER and ALPHABET are supported)
++//   - "追記" -> "追記" / KANJI
++//   (NUMBER, ALPHABET, KANJI and KATAKANA are used; see GetLastConnectivePart)
+ bool ExtractLastTokenWithScriptType(const absl::string_view text,
+                                     std::string* last_token,
+                                     Util::ScriptType* last_script_type) {
+@@ -140,7 +141,6 @@ bool HistoryReconstructor::GetLastConnectivePart(
+     return false;
+   }
+ 
+-  // Currently only NUMBER and ALPHABET are supported.
+   switch (last_script_type) {
+     case Util::NUMBER: {
+       *key = japanese_util::FullWidthAsciiToHalfWidthAscii(last_token);
+@@ -154,6 +154,27 @@ bool HistoryReconstructor::GetLastConnectivePart(
+       *id = pos_matcher_.GetUniqueNounId();
+       return true;
+     }
++    case Util::KANJI:
++    case Util::KATAKANA: {
++      // Japanese noun-like context. Upstream stops at NUMBER and ALPHABET, which means the far
++      // more common case — having just committed a Japanese word — reconstructs no history at
++      // all, and the next phrase is converted from a standing start. That is what makes a short
++      // particle lose to a homophone with a better unigram cost: 追記 followed by したい comes
++      // out as 追記死体, and 彼 followed by になった as 彼担った.
++      //
++      // The reading is not recoverable from the surface, so the key is the surface itself. That
++      // is inexact, but the key is not what this is for: the candidate carries lid/rid, and it is
++      // the right id that gives the following segment a noun to connect to. The candidate is
++      // marked NO_LEARNING below, so an approximate key never reaches the user's history.
++      //
++      // Hiragana is deliberately excluded. A trailing hiragana run is usually a particle or an
++      // inflectional ending rather than a noun, so calling it one would misinform the connection
++      // model more often than it helped.
++      *key = last_token;
++      *value = std::move(last_token);
++      *id = pos_matcher_.GetGeneralNounId();
++      return true;
++    }
+     default:
+       return false;
+   }
+diff --git a/src/rewriter/BUILD.bazel b/src/rewriter/BUILD.bazel
+index 08eed9058..5d8a9e0ae 100644
+--- a/src/rewriter/BUILD.bazel
++++ b/src/rewriter/BUILD.bazel
+@@ -809,6 +809,20 @@ mozc_cc_test(
+     ],
+ )
+ 
++mozc_cc_library(
++    name = "context_particle_rewriter",
++    srcs = ["context_particle_rewriter.cc"],
++    hdrs = ["context_particle_rewriter.h"],
++    visibility = ["//:__subpackages__"],
++    deps = [
++        ":rewriter_interface",
++        "//converter:segments",
++        "//dictionary:pos_matcher",
++        "//request:conversion_request",
++        "@com_google_absl//absl/strings",
++    ],
++)
++
+ mozc_cc_library(
+     name = "unicode_rewriter",
+     srcs = ["unicode_rewriter.cc"],
+@@ -1519,6 +1533,7 @@ mozc_cc_library(
+         "//engine:__pkg__",
+     ],
+     deps = [
++        ":context_particle_rewriter",
+         ":a11y_description_rewriter",
+         ":calculator_rewriter",
+         ":collocation_rewriter",
+diff --git a/src/rewriter/context_particle_rewriter.cc b/src/rewriter/context_particle_rewriter.cc
+new file mode 100644
+index 000000000..8362fbd80
+--- /dev/null
++++ b/src/rewriter/context_particle_rewriter.cc
+@@ -0,0 +1,89 @@
++#include "rewriter/context_particle_rewriter.h"
++
++#include <algorithm>
++#include <cstddef>
++#include <cstdint>
++
++#include "absl/strings/string_view.h"
++#include "converter/segments.h"
++#include "request/conversion_request.h"
++
++namespace mozc {
++namespace {
++
++// The particles worth protecting: one- and two-mora function words that follow a noun and have
++// common homophones among content words. Longer or rarer ones are left alone — the point is to
++// settle a close call, not to force kana wherever it could appear.
++constexpr absl::string_view kParticles[] = {
++    "に", "を", "が", "へ", "で", "は", "も", "と", "から", "まで",
++    "には", "にも", "では", "でも", "とは", "への", "からの",
++};
++
++// How far down the list to look. A candidate the converter put below this is not losing a close
++// call, and dragging it to the front would be overruling the language model rather than informing
++// it.
++constexpr size_t kMaxRank = 5;
++
++bool StartsWithParticle(absl::string_view text) {
++  for (const absl::string_view particle : kParticles) {
++    if (text.size() > particle.size() && text.starts_with(particle)) {
++      return true;
++    }
++    if (text == particle) {
++      return true;
++    }
++  }
++  return false;
++}
++
++// Whether the phrase to the left is the kind of thing a particle attaches to.
++bool HistoryIsNoun(const Segments &segments,
++                   const dictionary::PosMatcher &pos_matcher) {
++  if (segments.history_segments_size() == 0) {
++    return false;
++  }
++  const Segment &history =
++      segments.history_segment(segments.history_segments_size() - 1);
++  if (history.candidates_size() == 0) {
++    return false;
++  }
++  const uint16_t rid = history.candidate(0).rid;
++  return pos_matcher.IsGeneralNoun(rid) || pos_matcher.IsUniqueNoun(rid) ||
++         pos_matcher.IsNumber(rid);
++}
++
++}  // namespace
++
++bool ContextParticleRewriter::Rewrite(const ConversionRequest &request,
++                                      Segments *segments) const {
++  if (segments == nullptr || segments->conversion_segments_size() == 0) {
++    return false;
++  }
++  if (!HistoryIsNoun(*segments, pos_matcher_)) {
++    return false;
++  }
++
++  Segment *segment = segments->mutable_conversion_segment(0);
++  if (segment->candidates_size() < 2) {
++    return false;
++  }
++  // Only phrases that are *read* as starting with a particle are candidates for this at all.
++  if (!StartsWithParticle(segment->candidate(0).key)) {
++    return false;
++  }
++  // Already right; nothing to settle.
++  if (StartsWithParticle(segment->candidate(0).value)) {
++    return false;
++  }
++
++  const size_t limit = std::min(kMaxRank, segment->candidates_size());
++  for (size_t i = 1; i < limit; ++i) {
++    if (StartsWithParticle(segment->candidate(i).value)) {
++      segment->move_candidate(static_cast<int>(i), 0);
++      return true;
++    }
++  }
++  return false;
++}
++
++}  // namespace mozc
+diff --git a/src/rewriter/context_particle_rewriter.h b/src/rewriter/context_particle_rewriter.h
+new file mode 100644
+index 000000000..459644844
+--- /dev/null
++++ b/src/rewriter/context_particle_rewriter.h
+@@ -0,0 +1,46 @@
++// Prefers a particle reading over its homophones when the phrase follows a noun.
++
++#ifndef MOZC_REWRITER_CONTEXT_PARTICLE_REWRITER_H_
++#define MOZC_REWRITER_CONTEXT_PARTICLE_REWRITER_H_
++
++#include "converter/segments.h"
++#include "dictionary/pos_matcher.h"
++#include "request/conversion_request.h"
++#include "rewriter/rewriter_interface.h"
++
++namespace mozc {
++
++// Promotes a candidate that begins with a particle when the text to the left is a noun.
++//
++// Japanese conversion decides に after 東京 by segment connection cost, and that comparison is
++// only as good as the left context. A mobile input method usually has none: each phrase is
++// converted from a standing start, so a one-mora particle is ranked against homophones — 二, 荷,
++// 似 — that carry a better unigram cost on their own. 東京 に行きます comes out as 東京 二行きます,
++// 練習 なら as 練習 奈良, 追記 したい as 追記 死体.
++//
++// The client does know what was committed to the left, and mozc will reconstruct a history segment
++// from it (see converter/history_reconstructor.cc). This rewriter is what turns that knowledge
++// into an ordering: when the history segment is noun-like and the current phrase has a reading
++// that starts with a particle, the candidate that actually leaves the particle as kana is moved
++// ahead of the homophones.
++//
++// Deliberately conservative. It only promotes a candidate that the converter already ranked near
++// the top, so this settles a close call rather than inventing an answer, and it never runs without
++// a noun to the left.
++class ContextParticleRewriter : public RewriterInterface {
++ public:
++  explicit ContextParticleRewriter(const dictionary::PosMatcher &pos_matcher)
++      : pos_matcher_(pos_matcher) {}
++
++  int capability(const ConversionRequest &request) const override { return ALL; }
++
++  bool Rewrite(const ConversionRequest &request,
++               Segments *segments) const override;
++
++ private:
++  const dictionary::PosMatcher pos_matcher_;
++};
++
++}  // namespace mozc
++
++#endif  // MOZC_REWRITER_CONTEXT_PARTICLE_REWRITER_H_
+diff --git a/src/rewriter/rewriter.cc b/src/rewriter/rewriter.cc
+index d92e814fd..b1f829b35 100644
+--- a/src/rewriter/rewriter.cc
++++ b/src/rewriter/rewriter.cc
+@@ -58,6 +58,7 @@
+ #include "rewriter/symbol_rewriter.h"
+ #include "rewriter/t13n_promotion_rewriter.h"
+ #include "rewriter/transliteration_rewriter.h"
++#include "rewriter/context_particle_rewriter.h"
+ #include "rewriter/unicode_rewriter.h"
+ #include "rewriter/user_boundary_history_rewriter.h"
+ #include "rewriter/user_segment_history_rewriter.h"
+@@ -159,6 +160,7 @@ Rewriter::Rewriter(const engine::Modules& modules) {
+   AddRewriter(std::make_unique<CalculatorRewriter>());
+   AddRewriter(make_unique_from_tuples<SymbolRewriter>(
+       data_manager.GetSymbolRewriterData()));
++  AddRewriter(std::make_unique<ContextParticleRewriter>(pos_matcher));
+   AddRewriter(std::make_unique<UnicodeRewriter>());
+   AddRewriter(std::make_unique<VariantsRewriter>(pos_matcher));
+   AddRewriter(std::make_unique<ZipcodeRewriter>(pos_matcher));
