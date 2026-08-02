@@ -37,7 +37,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
-import dev.oss.ime.karukan.KarukanEngine
 import dev.oss.ime.keyboard.FlickGuideStyle
 import dev.oss.ime.keyboard.KeyboardStyle
 import dev.oss.ime.keyboard.LayoutRepository
@@ -150,7 +149,6 @@ private fun KeyboardCard() {
 
     var style by remember { mutableStateOf(settings.keyboardStyle) }
     var guide by remember { mutableStateOf(settings.flickGuideStyle) }
-    var neural by remember { mutableStateOf(settings.neuralConversion) }
     var heightScale by remember { mutableStateOf(settings.keyHeightScale) }
 
     Card(modifier = Modifier.fillMaxWidth()) {
@@ -203,31 +201,6 @@ private fun KeyboardCard() {
                         onClick = onSelect,
                         modifier = Modifier.fillMaxWidth(),
                     ) { Text(label) }
-                }
-            }
-
-            if (KarukanEngine.isBundled) {
-                HorizontalDivider()
-
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    Column(Modifier.weight(1f)) {
-                        Text("ニューラル変換 (試験)", style = MaterialTheme.typography.bodyLarge)
-                        Text(
-                            "karukan の小さな言語モデルに変換を尋ね、mozc の候補の後ろに足します。" +
-                                "遅くなります",
-                            style = MaterialTheme.typography.bodySmall,
-                        )
-                    }
-                    Switch(
-                        checked = neural,
-                        onCheckedChange = {
-                            neural = it
-                            settings.neuralConversion = it
-                        },
-                    )
                 }
             }
 

@@ -76,20 +76,8 @@ class ZinnaImeService : InputMethodService() {
     /** What the strip is worth when it is not covering the keyboard. */
     private var collapsedStripHeight = 0
 
-    /** Experimental neural conversion, null unless the setting is on and a model was bundled. */
-    private var neural: NeuralCandidates? = null
-
-    /** The last state mozc rendered, so a late neural reply can be merged into it. */
+    /** The last state mozc rendered, so the expand chip can redraw from it. */
     private var lastState: MozcSession.State? = null
-
-    /**
-     * The neural model's conversions of the composition currently on screen.
-     *
-     * Kept so the confirm key can commit what the strip is actually showing. Cleared whenever the
-     * reading moves on, so a stale answer is never committed.
-     */
-    private var neuralFor: String = ""
-    private var neuralTexts: List<String> = emptyList()
 
     /**
      * The system-bar insets last dispatched to us.
@@ -108,11 +96,6 @@ class ZinnaImeService : InputMethodService() {
         repository = LayoutRepository(this)
         settings = ImeSettings(this)
         session = MozcSession(this)
-        val candidates = NeuralCandidates(this)
-        if (candidates.isBundled) {
-            candidates.listener = NeuralCandidates.Listener(::onNeuralCandidates)
-            neural = candidates
-        }
         if (!session.isAvailable) {
             // Without the native engine there is nothing useful to do; the keyboard still renders
             // so the user can switch away rather than being stuck with a dead input field.
@@ -267,7 +250,6 @@ class ZinnaImeService : InputMethodService() {
             session.resetContext()
             isComposing = false
             lastTableKey = null
-            neuralTexts = emptyList()
             showIdleActions()
         }
     }
@@ -282,7 +264,6 @@ class ZinnaImeService : InputMethodService() {
     }
 
     override fun onDestroy() {
-        neural?.close()
         session.close()
         super.onDestroy()
     }
@@ -547,21 +528,6 @@ class ZinnaImeService : InputMethodService() {
 
         isComposing = state.hasComposition
         lastState = state
-        if (neuralFor != state.preedit) {
-            neuralFor = state.preedit
-            neuralTexts = emptyList()
-        }
-
-        // mozc's candidates are what the strip shows while the model is still thinking. Holding
-        // them back left it blank for the first word of every sentence, which is worse than the
-        // reordering it was meant to avoid.
-        if (state.hasComposition && settings.neuralConversion) {
-            neural?.request(
-                reading = state.preedit,
-                context = "",
-                already = state.candidates.map { it.text },
-            )
-        }
 
         if (state.candidates.isEmpty()) {
             candidateView?.expanded = false
@@ -571,9 +537,6 @@ class ZinnaImeService : InputMethodService() {
         }
     }
 
-    /** The neural conversions as strip candidates. Negative ids: these are not mozc's to select. */
-    private fun neuralCandidateList(): List<MozcSession.Candidate> =
-        neuralTexts.mapIndexed { i, text -> MozcSession.Candidate(-(i + 1), text) }
 
     /**
      * Puts the keyboard back into a usable state after mozc failed to answer.
@@ -598,9 +561,9 @@ class ZinnaImeService : InputMethodService() {
     /**
      * Commits a candidate the user tapped.
      *
-     * mozc's candidates are selected by id so it can learn from the choice. The neural ones are not
-     * mozc's — their ids are ours and negative — so they are committed as plain text, after telling
-     * mozc to finish what it was composing.
+     * mozc's candidates are selected by id so it can learn from the choice. Anything with an id we
+     * made up is not mozc's to select, so it is committed as plain text after telling mozc to
+     * finish what it was composing.
      */
     private fun onCandidateSelected(candidate: MozcSession.Candidate) {
         candidateView?.expanded = false
@@ -613,34 +576,6 @@ class ZinnaImeService : InputMethodService() {
         currentInputConnection?.commitText(candidate.text, 1)
         lastTableKey = null
         showIdleActions()
-    }
-
-    /**
-     * Puts the neural model's conversions in front of mozc's.
-     *
-     * Turning the feature on is a statement that the model is the one to believe, so it takes the
-     * front of the strip outright rather than being offered as an afterthought. mozc's candidates
-     * keep their order behind it, and remain what the strip shows on its own until the model
-     * answers.
-     *
-     * The reordering is visible: mozc's list is drawn first and the neural ones arrive a moment
-     * later, so the strip shifts under the thumb. That is inherent to running a language model off
-     * the keystroke path, and the alternative — holding the strip blank until the model replies —
-     * is worse.
-     *
-     * A reply for a reading that is no longer being composed is dropped; the user has typed on.
-     */
-    private fun onNeuralCandidates(reading: String, candidates: List<String>) {
-        val state = lastState ?: return
-        if (state.preedit != reading || !isComposing) return
-        neuralFor = reading
-        neuralTexts = candidates
-        val leading = neuralCandidateList()
-        // The focus points at a slot in mozc's list, which has just moved along by that many.
-        val focused =
-            if (state.focusedCandidateIndex < 0) -1
-            else state.focusedCandidateIndex + leading.size
-        candidateView?.setCandidates(leading + state.candidates, focused)
     }
 
     /**

@@ -50,12 +50,9 @@ echo "sdk.dir=$ANDROID_HOME" > local.properties
 ```
 app/       IME 本体 — InputMethodService, キーボード View, 設定画面
 mozc/      mozc ネイティブのラッパ — JNI シム, 生成 protobuf, libmozc.so, mozc.data
-karukan/   ニューラル変換 (試験)。ビルド時に要求しない限り何も入らない
-native/    karukan への Rust JNI ブリッジ
 patches/   third_party/mozc への変更。ビルド時に適用する
 scripts/   ネイティブビルド、配列/アイコン生成、辞書取得
 third_party/mozc/     上流の checkout (gitignore)
-third_party/karukan/  上流の checkout (gitignore)
 ```
 
 ### mozc との境界
@@ -215,24 +212,6 @@ mozc はこれを history segment に変換し、候補順位に効かせる。
 
 パスワード欄には種別だけを渡し、本文は渡さない。
 
-### ニューラル変換 (試験、既定オフ)
-
-[karukan](https://github.com/togatoga/karukan) は llama.cpp で小さな GPT-2 を動かす
-Rust 製かな漢字変換エンジン。組み込むと、設定でオンにしたとき mozc より前に候補を出す。
-
-既定のビルドにはエンジンもモデルも入らない。みは数十 MB あって大半のビルドには不要だし、
-上流のモデルリポジトリにライセンス表記が無いため、再配布するかは公開する人が決めることで
-既定にすべきではない。
-
-```bash
-./scripts/build_karukan.sh                               # エンジンをクロスコンパイル (既定 arm64)
-./scripts/fetch_karukan_model.sh                         # 重みを取得
-./gradlew :app:assembleDebug -Pzinna.karukan.model=true   # 同梱してビルド
-```
-
-karukan は本来 HuggingFace から重みを落とす。`patches/karukan/0001` でローカルのファイルを
-直接開くコンストラクタを足したので、ダウンロード経路は使わないどころか通らない。
-このアプリにはそもそも INTERNET 権限が無い。
 
 ## カスタマイズ
 
@@ -293,14 +272,11 @@ mozc は履歴を元から暗号化しているが、Android が継承してし�
 ## 未実装・既知の制限
 
 - Gboard がこの記号面の `!?#` に持つ 2 ページ目は未実装。その位置は現状「かな」に戻る。
-- ニューラル変換のエンジンは既定で arm64 のみビルドする。他の ABI の APK はモデルだけを
-  抱えることになるので、その状態になるとビルド時に警告が出る。
 
 ## ライセンス
 
 - 本体: Apache License 2.0
 - `third_party/mozc`: BSD 3-Clause (Google Inc.)
-- `third_party/karukan`: MIT または Apache-2.0
 - 同梱辞書 `mozc.data`: mozc OSS 辞書由来。構成要素ごとのライセンスは
   上流の `data/dictionary_oss/README.txt` を参照
 - 同梱アイコン: [Bootstrap Icons](https://icons.getbootstrap.com), MIT

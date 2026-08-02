@@ -50,12 +50,9 @@ under `--config oss_android`. Asking for both in one command fails during analys
 ```
 app/       the input method — InputMethodService, keyboard views, settings
 mozc/      wrapper around the native engine — JNI shim, generated protobuf, libmozc.so, mozc.data
-karukan/   optional neural conversion (see below); carries nothing unless asked for at build time
-native/    the Rust JNI bridge to karukan
 patches/   what we change in third_party/mozc, applied at build time
 scripts/   native builds, layout and icon generation, dictionary fetching
 third_party/mozc/       upstream checkout (gitignored)
-third_party/karukan/    upstream checkout (gitignored)
 ```
 
 ### The boundary with mozc
@@ -218,26 +215,6 @@ a noun, because a hiragana run at the end of committed text is usually a particl
 
 Password fields are sent the field type and no text at all.
 
-### Neural conversion (experimental, off by default)
-
-[karukan](https://github.com/togatoga/karukan) is a Rust kana-kanji engine that runs a small GPT-2
-through llama.cpp. It can be built in as a second opinion, whose conversions are shown ahead of
-mozc's when the feature is switched on in settings.
-
-Neither the engine nor the model is in a default build. Both are opt-in at build time, because the
-weights are tens of megabytes most builds have no use for — and because the upstream model
-repositories carry no licence statement, which makes redistributing them a decision for whoever is
-publishing rather than a default.
-
-```bash
-./scripts/build_karukan.sh                               # cross-compiles the engine (arm64 by default)
-./scripts/fetch_karukan_model.sh                         # downloads the weights
-./gradlew :app:assembleDebug -Pzinna.karukan.model=true   # bundles them
-```
-
-karukan normally fetches its weights from HuggingFace on first use. `patches/karukan/0001` adds a
-constructor that opens a model already on disk, so the download path is not merely unused but
-absent — this app has no INTERNET permission to use it with.
 
 ## Customisation
 
@@ -300,14 +277,11 @@ extends the same encryption to the user dictionary, which had none.
 ## Known gaps
 
 - Gboard's second symbol page (`!?#`) is not implemented; that key currently returns to kana.
-- The neural engine is built for arm64 only by default. Other ABI splits would carry the model with
-  nothing able to run it, so the build warns when that would happen.
 
 ## Licence
 
 - This project: Apache License 2.0
 - `third_party/mozc`: BSD 3-Clause (Google Inc.)
-- `third_party/karukan`: MIT or Apache-2.0
 - Bundled `mozc.data`: derived from mozc's OSS dictionary; see upstream
   `data/dictionary_oss/README.txt` for the licences of its constituent parts
 - Bundled icons: [Bootstrap Icons](https://icons.getbootstrap.com), MIT

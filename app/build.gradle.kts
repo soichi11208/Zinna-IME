@@ -65,7 +65,6 @@ android {
 
 dependencies {
     implementation(project(":mozc"))
-    implementation(project(":karukan"))
 
     implementation(libs.androidx.core.ktx)
     implementation(libs.androidx.lifecycle.runtime.ktx)

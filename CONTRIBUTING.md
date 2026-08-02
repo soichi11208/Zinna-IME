@@ -9,10 +9,10 @@ Issue も Pull Request も歓迎します。日本語で書くこと。
 
 ### third_party を直接編集しない
 
-`third_party/mozc` と `third_party/karukan` は上流の checkout で、gitignore されています。
+`third_party/mozc` は上流の checkout で、gitignore されています。
 そこを直接書き換えても他の人には届きません。
 
-mozc / karukan 側に手を入れる必要があるときは `patches/` にパッチとして置いてください。
+mozc 側に手を入れる必要があるときは `patches/` にパッチとして置いてください。
 `scripts/build_mozc.sh` が適用します。作り方は、ツリーを編集してから
 
 ```bash
@@ -120,4 +120,4 @@ PR には次を書いてもらえると助かります。
 同梱物のライセンスは [NOTICE](NOTICE) を参照してください。
 
 辞書やモデルなど、サイズの大きいものは、
-そのままではマージできません。ビルド時の任意オプションにする形なら検討できます(karukanのモデルがそう)。
+そのままではマージできません。ビルド時の任意オプションにする形なら検討できます。
