@@ -1,6 +1,8 @@
 package dev.oss.ime.ime
 
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
+import org.junit.Assert.assertTrue
 import org.junit.Test
 
 /**
@@ -83,6 +85,29 @@ class CandidateOrderTest {
     fun noFocusStaysNoFocus() {
         val (_, focused) = order(candidates("あ", "い"), emptyMap())
         assertEquals(-1, focused)
+    }
+
+    /** The reported bug: にほん was offering ニホン before 日本. */
+    @Test
+    fun plainTransliterationsSinkToTheBottom() {
+        assertEquals(CandidateTier.TRANSLITERATION.ordinal, CandidateTier.entries.size - 1)
+        assertTrue(isTransliterationOf("にほん", "にほん"))
+        assertTrue(isTransliterationOf("ニホン", "にほん"))
+        assertFalse(isTransliterationOf("日本", "にほん"))
+        // Same length but not the same word.
+        assertFalse(isTransliterationOf("にっぽん", "にほんご"))
+    }
+
+    @Test
+    fun conversionsOutrankTheReadingWrittenOut() {
+        val raw = candidates("ニホン", "にほん", "日本")
+        val tiers = mapOf(
+            0 to CandidateTier.TRANSLITERATION,
+            1 to CandidateTier.TRANSLITERATION,
+            2 to CandidateTier.MOZC_PREDICTED,
+        )
+        val (ordered, _) = order(raw, tiers)
+        assertEquals(listOf("日本", "ニホン", "にほん"), ordered.map { it.text })
     }
 
     @Test
