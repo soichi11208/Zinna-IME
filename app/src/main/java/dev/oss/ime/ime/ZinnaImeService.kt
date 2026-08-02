@@ -73,6 +73,9 @@ class ZinnaImeService : InputMethodService() {
      */
     private var clientContextValid = false
 
+    /** What the strip is worth when it is not covering the keyboard. */
+    private var collapsedStripHeight = 0
+
     /** Experimental neural conversion, null unless the setting is on and a model was bundled. */
     private var neural: NeuralCandidates? = null
 
@@ -158,8 +161,19 @@ class ZinnaImeService : InputMethodService() {
         val candidates = CandidateStripView(this).apply {
             theme = this@ZinnaImeService.theme
             listener = CandidateStripView.OnCandidateSelectedListener(::onCandidateSelected)
+            // Expanding covers the keyboard rather than squeezing it: a two-row keyboard is not
+            // usable, and there is nothing to type while reading the list anyway.
+            expandedListener = CandidateStripView.OnExpandedChangeListener { open ->
+                keyboardView?.visibility = if (open) View.GONE else View.VISIBLE
+                (layoutParams as? LinearLayout.LayoutParams)?.let {
+                    it.height =
+                        if (open) LinearLayout.LayoutParams.MATCH_PARENT else collapsedStripHeight
+                    layoutParams = it
+                }
+            }
         }
         val stripHeight = (theme.keyHeightDp * 0.8f * resources.displayMetrics.density).toInt()
+        collapsedStripHeight = stripHeight
 
         val keyboard = FlickKeyboardView(this).apply {
             theme = this@ZinnaImeService.theme
@@ -550,6 +564,7 @@ class ZinnaImeService : InputMethodService() {
         }
 
         if (state.candidates.isEmpty()) {
+            candidateView?.expanded = false
             showIdleActions()
         } else {
             candidateView?.setCandidates(state.candidates, state.focusedCandidateIndex)
@@ -588,6 +603,7 @@ class ZinnaImeService : InputMethodService() {
      * mozc to finish what it was composing.
      */
     private fun onCandidateSelected(candidate: MozcSession.Candidate) {
+        candidateView?.expanded = false
         if (candidate.id >= 0) {
             render(session.selectCandidate(candidate.id))
             return

@@ -51,6 +51,11 @@ class MozcSession(context: Context) {
 
     data class Candidate(val id: Int, val text: String)
 
+    private companion object {
+        /** How many candidates to ask mozc for at once. */
+        const val CANDIDATE_PAGE_SIZE = 36
+    }
+
     private var currentStyle: InputStyle? = null
     private var configApplied = false
 
@@ -77,6 +82,11 @@ class MozcSession(context: Context) {
             .setMixedConversion(true)
             .setUpdateInputModeFromSurroundingText(false)
             .setAutoPartialSuggestion(true)
+            // Upstream's default is 9, which is a page for a desktop candidate window and too few
+            // for a strip the user can scroll and expand. The cost is a slightly longer
+            // candidate_window in each response; the field that actually dominated the payload,
+            // all_candidate_words, is trimmed at the JNI boundary instead.
+            .setCandidatePageSize(CANDIDATE_PAGE_SIZE)
             .setSpaceOnAlphanumeric(Request.SpaceOnAlphanumeric.SPACE_OR_CONVERT_COMMITTING_COMPOSITION)
             .setCrossingEdgeBehavior(Request.CrossingEdgeBehavior.COMMIT_WITHOUT_CONSUMING)
             // Forgives a missing or stray dakuten/small kana: "かつこう" still finds 学校. Costs

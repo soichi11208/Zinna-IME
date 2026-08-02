@@ -5,9 +5,12 @@ import android.content.Context
 import android.content.res.ColorStateList
 import android.util.TypedValue
 import android.view.Gravity
+import android.view.ViewGroup
 import android.view.HapticFeedbackConstants
+import android.widget.FrameLayout
 import android.widget.HorizontalScrollView
 import android.widget.LinearLayout
+import android.widget.ScrollView
 import android.widget.TextView
 import dev.oss.ime.R
 import dev.oss.ime.ime.MozcSession
@@ -21,7 +24,7 @@ import dev.oss.ime.theme.KeyboardTheme
  * latency on the hottest path in the app.
  */
 @SuppressLint("ViewConstructor")
-class CandidateStripView(context: Context) : HorizontalScrollView(context) {
+class CandidateStripView(context: Context) : FrameLayout(context) {
 
     fun interface OnCandidateSelectedListener {
         fun onCandidateSelected(candidate: MozcSession.Candidate)
@@ -52,19 +55,63 @@ class CandidateStripView(context: Context) : HorizontalScrollView(context) {
     /** Which chip currently carries the focus highlight, so only the two that change are touched. */
     private var focusedChild = -1
 
-    private val container = LinearLayout(context).apply {
+    fun interface OnExpandedChangeListener {
+        fun onExpandedChanged(expanded: Boolean)
+    }
+
+    /** Told when the user opens or closes the full list, so the keyboard can make room. */
+    var expandedListener: OnExpandedChangeListener? = null
+
+    /**
+     * Whether the whole candidate list is on show.
+     *
+     * Collapsed, the chips sit on one line that scrolls sideways — which is the right shape while
+     * typing, and the wrong one for reading twenty candidates. Expanded, they wrap into rows over
+     * the keyboard, the way every other input method does it.
+     */
+    var expanded: Boolean = false
+        set(value) {
+            if (field == value) return
+            field = value
+            oneLine.visibility = if (value) GONE else VISIBLE
+            wrapped.visibility = if (value) VISIBLE else GONE
+            // Chips live in exactly one of the two containers, so they move across on every toggle.
+            val from = if (value) row else grid
+            val to = if (value) grid else row
+            while (from.childCount > 0) {
+                val chip = from.getChildAt(0)
+                from.removeViewAt(0)
+                to.addView(chip)
+            }
+            invalidate()
+            expandedListener?.onExpandedChanged(value)
+        }
+
+    private val row = LinearLayout(context).apply {
         orientation = LinearLayout.HORIZONTAL
         gravity = Gravity.CENTER_VERTICAL
     }
 
-    init {
+    private val grid = FlowLayout(context)
+
+    private val oneLine = HorizontalScrollView(context).apply {
         isHorizontalScrollBarEnabled = false
         isFillViewport = true
-        addView(
-            container,
-            LayoutParams(LayoutParams.WRAP_CONTENT, LayoutParams.MATCH_PARENT),
-        )
+        addView(row, LayoutParams(LayoutParams.WRAP_CONTENT, LayoutParams.MATCH_PARENT))
+    }
+
+    private val wrapped = ScrollView(context).apply {
+        visibility = GONE
+        addView(grid, LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.WRAP_CONTENT))
+    }
+
+    /** Whichever container is on screen; everything else here works through this. */
+    private val container: ViewGroup get() = if (expanded) grid else row
+
+    init {
         // Transparent so the panel behind — colour or the user's background image — shows through.
+        addView(oneLine, LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.MATCH_PARENT))
+        addView(wrapped, LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.MATCH_PARENT))
     }
 
     /**
@@ -79,6 +126,7 @@ class CandidateStripView(context: Context) : HorizontalScrollView(context) {
      * invalidate unconditionally, so assigning the same value still costs a layout pass.
      */
     fun setCandidates(candidates: List<MozcSession.Candidate>, focusedIndex: Int) {
+        detachTrailing()
         while (container.childCount > candidates.size) {
             container.removeViewAt(container.childCount - 1)
         }
@@ -108,7 +156,7 @@ class CandidateStripView(context: Context) : HorizontalScrollView(context) {
             highlight(focusedIndex, true)
             focusedChild = focusedIndex
         }
-        scrollTo(0, 0)
+        oneLine.scrollTo(0, 0)
     }
 
     /**
@@ -119,6 +167,7 @@ class CandidateStripView(context: Context) : HorizontalScrollView(context) {
      * differs, so the click path can tell an action from a candidate.
      */
     fun setActions(actions: List<Action>) {
+        detachTrailing()
         while (container.childCount > actions.size) {
             container.removeViewAt(container.childCount - 1)
         }
@@ -146,7 +195,43 @@ class CandidateStripView(context: Context) : HorizontalScrollView(context) {
             highlight(focusedChild, false)
             focusedChild = -1
         }
-        scrollTo(0, 0)
+        oneLine.scrollTo(0, 0)
+    }
+
+    /**
+     * Puts a single action at the end of the candidates, replacing any previous one.
+     *
+     * Kept apart from [setCandidates] so the candidate path stays a straight recycle: this is one
+     * chip that changes rarely, and rebuilding it per keystroke alongside them would put a layout
+     * pass back on the hot path that was taken off it.
+     */
+    fun setTrailingAction(action: Action?) {
+        val existing = trailing
+        if (action == null) {
+            if (existing != null) {
+                (existing.parent as? ViewGroup)?.removeView(existing)
+                trailing = null
+            }
+            return
+        }
+        val chip = existing ?: newChip().also { trailing = it }
+        chip.tag = action
+        if (chip.text != action.label) chip.text = action.label
+        val parent = container
+        if (chip.parent !== parent) {
+            (chip.parent as? ViewGroup)?.removeView(chip)
+            parent.addView(chip)
+        } else if (parent.indexOfChild(chip) != parent.childCount - 1) {
+            parent.removeView(chip)
+            parent.addView(chip)
+        }
+    }
+
+    /** The expand chip, kept out of the recycled pool so the counting stays simple. */
+    private var trailing: TextView? = null
+
+    private fun detachTrailing() {
+        trailing?.let { (it.parent as? ViewGroup)?.removeView(it) }
     }
 
     private fun highlight(index: Int, on: Boolean) {
