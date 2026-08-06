@@ -74,6 +74,22 @@ class ImeSettings(context: Context) {
         }
 
     /**
+     * Overrides [flickGuideStyle] with the full cross on the symbol plane.
+     *
+     * The preview answers "what will this type", which is enough on the kana plane because the four
+     * directions of か are already known. The symbol plane is the opposite case: nobody remembers
+     * that ※ hides on 7 or that ≦ is up from ±, and the preview only speaks once the finger is
+     * already moving the right way. On by default for that reason — the plane it affects is small,
+     * and it is the one place the cross earns the keys it covers.
+     */
+    var showAllDirectionsOnSymbolPlane: Boolean
+        get() = prefs.getBoolean(KEY_SYMBOL_ALL_DIRECTIONS, true)
+        set(value) {
+            prefs.edit().putBoolean(KEY_SYMBOL_ALL_DIRECTIONS, value).apply()
+            bumpRevision()
+        }
+
+    /**
      * The keyboard background image, or null for a plain colour.
      *
      * A copy under our own files directory, not the content URI the user picked: the IME runs in a
@@ -121,6 +137,7 @@ class ImeSettings(context: Context) {
         private const val KEY_HEIGHT_SCALE = "key_height_scale"
         private const val KEY_KEYBOARD_STYLE = "keyboard_style"
         private const val KEY_FLICK_GUIDE = "flick_guide_style"
+        private const val KEY_SYMBOL_ALL_DIRECTIONS = "symbol_all_directions"
         const val DEFAULT_BACKGROUND_OPACITY = 0.45f
         const val MIN_KEY_HEIGHT_SCALE = 0.7f
         const val MAX_KEY_HEIGHT_SCALE = 1.5f

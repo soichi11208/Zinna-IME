@@ -17,7 +17,9 @@ import androidx.core.view.updatePadding
 import dev.oss.ime.R
 import dev.oss.ime.keyboard.CandidateStripView
 import dev.oss.ime.keyboard.FlickDirection
+import dev.oss.ime.keyboard.FlickGuideStyle
 import dev.oss.ime.keyboard.FlickKeyboardView
+import dev.oss.ime.keyboard.InputStyle
 import dev.oss.ime.keyboard.KeyAction
 import dev.oss.ime.keyboard.KeyOutput
 import dev.oss.ime.keyboard.KeySpec
@@ -162,7 +164,7 @@ class ZinnaImeService : InputMethodService() {
             theme = this@ZinnaImeService.theme
             layout = loaded
             guideOverflowTop = stripHeight.toFloat()
-            guideStyle = settings.flickGuideStyle
+            guideStyle = guideStyleFor(loaded)
             listener = FlickKeyboardView.OnKeyOutputListener(::onKeyOutput)
         }
 
@@ -490,8 +492,27 @@ class ZinnaImeService : InputMethodService() {
         lastTableKey = null
         layout = next
         keyboardView?.layout = next
+        // Set alongside the layout, not once at view creation: the guide depends on which plane is
+        // showing, and switching planes never rebuilds the view.
+        keyboardView?.guideStyle = guideStyleFor(next)
         session.applyInputStyle(next.inputStyle)
     }
+
+    /**
+     * The guide to draw on [layout], which is the user's choice everywhere except the symbol plane.
+     *
+     * Keyed on the input style rather than the layout id so a hand-written layout gets the same
+     * treatment, and so the plain number pad — where no key offers a flick worth previewing — is
+     * left out.
+     */
+    private fun guideStyleFor(layout: KeyboardLayout?): FlickGuideStyle =
+        if (settings.showAllDirectionsOnSymbolPlane &&
+            layout?.inputStyle == InputStyle.TOGGLE_FLICK_NUMBER
+        ) {
+            FlickGuideStyle.DIRECTIONS
+        } else {
+            settings.flickGuideStyle
+        }
 
     private fun render(state: MozcSession.State?) {
         val ic = currentInputConnection ?: return

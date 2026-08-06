@@ -149,6 +149,7 @@ private fun KeyboardCard() {
 
     var style by remember { mutableStateOf(settings.keyboardStyle) }
     var guide by remember { mutableStateOf(settings.flickGuideStyle) }
+    var symbolAllDirections by remember { mutableStateOf(settings.showAllDirectionsOnSymbolPlane) }
     var heightScale by remember { mutableStateOf(settings.keyHeightScale) }
 
     Card(modifier = Modifier.fillMaxWidth()) {
@@ -202,6 +203,27 @@ private fun KeyboardCard() {
                         modifier = Modifier.fillMaxWidth(),
                     ) { Text(label) }
                 }
+            }
+
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Column(Modifier.weight(1f)) {
+                    Text("記号面は常に4方向", style = MaterialTheme.typography.bodyLarge)
+                    Text(
+                        "記号はどの方向に何があるか覚えにくいので、上の選択に関わらず記号面だけ" +
+                            "4方向すべてを出します",
+                        style = MaterialTheme.typography.bodySmall,
+                    )
+                }
+                Switch(
+                    checked = symbolAllDirections,
+                    onCheckedChange = {
+                        symbolAllDirections = it
+                        settings.showAllDirectionsOnSymbolPlane = it
+                    },
+                )
             }
 
             HorizontalDivider()

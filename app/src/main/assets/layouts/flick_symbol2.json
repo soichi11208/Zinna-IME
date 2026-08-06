@@ -1,6 +1,6 @@
 {
-  "id": "flick_symbol",
-  "label": "記号・数字",
+  "id": "flick_symbol2",
+  "label": "記号 2",
   "inputStyle": "TOGGLE_FLICK_NUMBER",
   "rows": [
     {
@@ -8,10 +8,10 @@
         {
           "weight": 1.0,
           "center": {
-            "label": "!?#",
+            "label": "123",
             "action": {
               "type": "layout",
-              "layoutId": "flick_symbol2"
+              "layoutId": "flick_symbol"
             }
           },
           "style": "MODIFIER"
@@ -19,32 +19,32 @@
         {
           "weight": 1.0,
           "center": {
-            "label": "1",
+            "label": "、",
             "action": {
-              "type": "input",
-              "text": "1"
+              "type": "symbol",
+              "text": "、"
             }
           },
           "style": "CHARACTER",
           "left": {
-            "label": "☆",
+            "label": "。",
             "action": {
-              "type": "input",
-              "text": "☆"
+              "type": "symbol",
+              "text": "。"
             }
           },
           "up": {
-            "label": "♪",
+            "label": "！",
             "action": {
-              "type": "input",
-              "text": "♪"
+              "type": "symbol",
+              "text": "！"
             }
           },
           "right": {
-            "label": "→",
+            "label": "？",
             "action": {
-              "type": "input",
-              "text": "→"
+              "type": "symbol",
+              "text": "？"
             }
           },
           "down": null
@@ -52,32 +52,32 @@
         {
           "weight": 1.0,
           "center": {
-            "label": "2",
+            "label": "『",
             "action": {
-              "type": "input",
-              "text": "2"
+              "type": "symbol",
+              "text": "『"
             }
           },
           "style": "CHARACTER",
           "left": {
-            "label": "¥",
+            "label": "』",
             "action": {
-              "type": "input",
-              "text": "¥"
+              "type": "symbol",
+              "text": "』"
             }
           },
           "up": {
-            "label": "$",
+            "label": "【",
             "action": {
-              "type": "input",
-              "text": "$"
+              "type": "symbol",
+              "text": "【"
             }
           },
           "right": {
-            "label": "€",
+            "label": "】",
             "action": {
-              "type": "input",
-              "text": "€"
+              "type": "symbol",
+              "text": "】"
             }
           },
           "down": null
@@ -85,32 +85,32 @@
         {
           "weight": 1.0,
           "center": {
-            "label": "3",
+            "label": "〈",
             "action": {
-              "type": "input",
-              "text": "3"
+              "type": "symbol",
+              "text": "〈"
             }
           },
           "style": "CHARACTER",
           "left": {
-            "label": "%",
+            "label": "〉",
             "action": {
-              "type": "input",
-              "text": "%"
+              "type": "symbol",
+              "text": "〉"
             }
           },
           "up": {
-            "label": "゜",
+            "label": "《",
             "action": {
-              "type": "input",
-              "text": "゜"
+              "type": "symbol",
+              "text": "《"
             }
           },
           "right": {
-            "label": "#",
+            "label": "》",
             "action": {
-              "type": "input",
-              "text": "#"
+              "type": "symbol",
+              "text": "》"
             }
           },
           "down": null
@@ -145,32 +145,32 @@
         {
           "weight": 1.0,
           "center": {
-            "label": "4",
+            "label": "〔",
             "action": {
-              "type": "input",
-              "text": "4"
+              "type": "symbol",
+              "text": "〔"
             }
           },
           "style": "CHARACTER",
           "left": {
-            "label": "○",
+            "label": "〕",
             "action": {
-              "type": "input",
-              "text": "○"
+              "type": "symbol",
+              "text": "〕"
             }
           },
           "up": {
-            "label": "*",
+            "label": "｛",
             "action": {
-              "type": "input",
-              "text": "*"
+              "type": "symbol",
+              "text": "｛"
             }
           },
           "right": {
-            "label": "・",
+            "label": "｝",
             "action": {
-              "type": "input",
-              "text": "・"
+              "type": "symbol",
+              "text": "｝"
             }
           },
           "down": null
@@ -178,32 +178,32 @@
         {
           "weight": 1.0,
           "center": {
-            "label": "5",
+            "label": "\"",
             "action": {
-              "type": "input",
-              "text": "5"
+              "type": "symbol",
+              "text": "\""
             }
           },
           "style": "CHARACTER",
           "left": {
-            "label": "+",
+            "label": "'",
             "action": {
-              "type": "input",
-              "text": "+"
+              "type": "symbol",
+              "text": "'"
             }
           },
           "up": {
-            "label": "×",
+            "label": "＿",
             "action": {
-              "type": "input",
-              "text": "×"
+              "type": "symbol",
+              "text": "＿"
             }
           },
           "right": {
-            "label": "÷",
+            "label": "；",
             "action": {
-              "type": "input",
-              "text": "÷"
+              "type": "symbol",
+              "text": "；"
             }
           },
           "down": null
@@ -211,32 +211,32 @@
         {
           "weight": 1.0,
           "center": {
-            "label": "6",
+            "label": "＆",
             "action": {
-              "type": "input",
-              "text": "6"
+              "type": "symbol",
+              "text": "＆"
             }
           },
           "style": "CHARACTER",
           "left": {
-            "label": "<",
+            "label": "＄",
             "action": {
-              "type": "input",
-              "text": "<"
+              "type": "symbol",
+              "text": "＄"
             }
           },
           "up": {
-            "label": "=",
+            "label": "％",
             "action": {
-              "type": "input",
-              "text": "="
+              "type": "symbol",
+              "text": "％"
             }
           },
           "right": {
-            "label": ">",
+            "label": "＠",
             "action": {
-              "type": "input",
-              "text": ">"
+              "type": "symbol",
+              "text": "＠"
             }
           },
           "down": null
@@ -271,32 +271,32 @@
         {
           "weight": 1.0,
           "center": {
-            "label": "7",
+            "label": "±",
             "action": {
-              "type": "input",
-              "text": "7"
+              "type": "symbol",
+              "text": "±"
             }
           },
           "style": "CHARACTER",
           "left": {
-            "label": "「",
+            "label": "≠",
             "action": {
-              "type": "input",
-              "text": "「"
+              "type": "symbol",
+              "text": "≠"
             }
           },
           "up": {
-            "label": "」",
+            "label": "≦",
             "action": {
-              "type": "input",
-              "text": "」"
+              "type": "symbol",
+              "text": "≦"
             }
           },
           "right": {
-            "label": ":",
+            "label": "≧",
             "action": {
-              "type": "input",
-              "text": ":"
+              "type": "symbol",
+              "text": "≧"
             }
           },
           "down": null
@@ -304,32 +304,32 @@
         {
           "weight": 1.0,
           "center": {
-            "label": "8",
+            "label": "∞",
             "action": {
-              "type": "input",
-              "text": "8"
+              "type": "symbol",
+              "text": "∞"
             }
           },
           "style": "CHARACTER",
           "left": {
-            "label": "〒",
+            "label": "°",
             "action": {
-              "type": "input",
-              "text": "〒"
+              "type": "symbol",
+              "text": "°"
             }
           },
           "up": {
-            "label": "々",
+            "label": "℃",
             "action": {
-              "type": "input",
-              "text": "々"
+              "type": "symbol",
+              "text": "℃"
             }
           },
           "right": {
-            "label": "〆",
+            "label": "√",
             "action": {
-              "type": "input",
-              "text": "〆"
+              "type": "symbol",
+              "text": "√"
             }
           },
           "down": null
@@ -337,32 +337,32 @@
         {
           "weight": 1.0,
           "center": {
-            "label": "9",
+            "label": "※",
             "action": {
-              "type": "input",
-              "text": "9"
+              "type": "symbol",
+              "text": "※"
             }
           },
           "style": "CHARACTER",
           "left": {
-            "label": "^",
+            "label": "©",
             "action": {
-              "type": "input",
-              "text": "^"
+              "type": "symbol",
+              "text": "©"
             }
           },
           "up": {
-            "label": "|",
+            "label": "®",
             "action": {
-              "type": "input",
-              "text": "|"
+              "type": "symbol",
+              "text": "®"
             }
           },
           "right": {
-            "label": "\\",
+            "label": "™",
             "action": {
-              "type": "input",
-              "text": "\\"
+              "type": "symbol",
+              "text": "™"
             }
           },
           "down": null
@@ -396,66 +396,32 @@
         {
           "weight": 1.0,
           "center": {
-            "label": "(",
+            "label": "●",
             "action": {
-              "type": "input",
-              "text": "("
+              "type": "symbol",
+              "text": "●"
             }
           },
           "style": "CHARACTER",
           "left": {
-            "label": ")",
+            "label": "▲",
             "action": {
-              "type": "input",
-              "text": ")"
+              "type": "symbol",
+              "text": "▲"
             }
           },
           "up": {
-            "label": "[",
+            "label": "■",
             "action": {
-              "type": "input",
-              "text": "["
+              "type": "symbol",
+              "text": "■"
             }
           },
           "right": {
-            "label": "]",
+            "label": "◆",
             "action": {
-              "type": "input",
-              "text": "]"
-            }
-          },
-          "down": null,
-          "label": "()[]"
-        },
-        {
-          "weight": 1.0,
-          "center": {
-            "label": "0",
-            "action": {
-              "type": "input",
-              "text": "0"
-            }
-          },
-          "style": "CHARACTER",
-          "left": {
-            "label": "〜",
-            "action": {
-              "type": "input",
-              "text": "〜"
-            }
-          },
-          "up": {
-            "label": "…",
-            "action": {
-              "type": "input",
-              "text": "…"
-            }
-          },
-          "right": {
-            "label": "@",
-            "action": {
-              "type": "input",
-              "text": "@"
+              "type": "symbol",
+              "text": "◆"
             }
           },
           "down": null
@@ -463,36 +429,68 @@
         {
           "weight": 1.0,
           "center": {
-            "label": ".",
+            "label": "★",
             "action": {
-              "type": "input",
-              "text": "."
+              "type": "symbol",
+              "text": "★"
             }
           },
           "style": "CHARACTER",
           "left": {
-            "label": ",",
+            "label": "♡",
             "action": {
-              "type": "input",
-              "text": ","
+              "type": "symbol",
+              "text": "♡"
             }
           },
           "up": {
-            "label": "-",
+            "label": "♂",
             "action": {
-              "type": "input",
-              "text": "-"
+              "type": "symbol",
+              "text": "♂"
             }
           },
           "right": {
-            "label": "/",
+            "label": "♀",
             "action": {
-              "type": "input",
-              "text": "/"
+              "type": "symbol",
+              "text": "♀"
             }
           },
-          "down": null,
-          "label": ".,-/"
+          "down": null
+        },
+        {
+          "weight": 1.0,
+          "center": {
+            "label": "→",
+            "action": {
+              "type": "symbol",
+              "text": "→"
+            }
+          },
+          "style": "CHARACTER",
+          "left": {
+            "label": "←",
+            "action": {
+              "type": "symbol",
+              "text": "←"
+            }
+          },
+          "up": {
+            "label": "↑",
+            "action": {
+              "type": "symbol",
+              "text": "↑"
+            }
+          },
+          "right": {
+            "label": "↓",
+            "action": {
+              "type": "symbol",
+              "text": "↓"
+            }
+          },
+          "down": null
         },
         {
           "weight": 1.0,

@@ -57,6 +57,47 @@ class LayoutParseTest {
         }
     }
 
+    /**
+     * Reaching page two has to be a round trip — it is the only way back, since the pages replace
+     * each other rather than stacking.
+     *
+     * Characters are allowed on both pages: page one already carries →, and the arrow key needs it
+     * more than page one does.
+     */
+    @Test
+    fun theTwoFlickSymbolPagesLinkBothWays() {
+        fun page(id: String) = layouts().first { it.second.id == id }.second
+
+        fun switchTargets(layout: KeyboardLayout): Set<String> = buildSet {
+            for (row in layout.rows) {
+                for (key in row.keys) {
+                    (key.center.action as? KeyAction.SwitchLayout)?.let { add(it.layoutId) }
+                }
+            }
+        }
+
+        val first = page("flick_symbol")
+        val second = page("flick_symbol2")
+
+        assertTrue("flick_symbol cannot reach page two", "flick_symbol2" in switchTargets(first))
+        assertTrue("flick_symbol2 is a dead end", "flick_symbol" in switchTargets(second))
+
+        // Page one's characters are all keys in mozc's number table, so Input works there. Page
+        // two's are not, and that table reuses punctuation to select digits, so anything sent as
+        // Input would come back as a number. See KeyAction.InsertSymbol.
+        for (row in second.rows) {
+            for (key in row.keys) {
+                for (dir in FlickDirection.entries) {
+                    val action = key.output(dir)?.action
+                    assertTrue(
+                        "page two must insert verbatim, not through the number table: $action",
+                        action !is KeyAction.Input,
+                    )
+                }
+            }
+        }
+    }
+
     /** Shift only belongs where mozc's table actually composes upper case. */
     @Test
     fun shiftOnlyOnLatinPlanes() {
