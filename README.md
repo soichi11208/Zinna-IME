@@ -15,6 +15,12 @@ Android 向けオープンソース日本語 IME。変換エンジンに [mozc](
 0.1.0〜0.9.xはOpenBeta
 1.0.0から安定とする予定
 
+# 寄付
+継続的な開発の………いや僕の一杯のコーヒーのために寄付してくれるとありがたいです。
+我儘なことに決済手段をXMRとLTCしか受付けてませんが、Cypherpunkのみなさんですから…
+XMR:83kVmZuxUBzDUnhAiJM8LLDH2sdWiJ6Zi7t7XkF3AK7CQB6ervBetQx2rR7apYHKSySbRFDwF1n7BhpJEu598pau1SJRhyv
+LTC:ltcmweb1qqd974nfw2hn2hua5mefltrxe3yeunceqqwd4je76q9pqmw48q0nz2qel738v9anp6rj2mx3yrttwrfjhrsr2p05s6vp98w203u7nk2afucg330wq
+
 ## ビルド
 
 ### 前提
