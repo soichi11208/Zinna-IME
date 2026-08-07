@@ -15,6 +15,12 @@ the network even if a future dependency wanted one.
 
 Versioning: 0.0.1–0.0.9 is open alpha, 0.1.0–0.9.x open beta, 1.0.0 the first stable release.
 
+# Donations
+​Donations for ongoing development... actually, no, if you could just buy me a cup of coffee, I'd really appreciate it.
+Selfishly enough, I only accept XMR and LTC, but hey, you're all Cypherpunks, so...
+​XMR: 83kVmZuxUBzDUnhAiJM8LLDH2sdWiJ6Zi7t7XkF3AK7CQB6ervBetQx2rR7apYHKSySbRFDwF1n7BhpJEu598pau1SJRhyv
+LTC: ltcmweb1qqd974nfw2hn2hua5mefltrxe3yeunceqqwd4je76q9pqmw48q0nz2qel738v9anp6rj2mx3yrttwrfjhrsr2p05s6vp98w203u7nk2afucg330wq
+
 ## Building
 
 ### Requirements
