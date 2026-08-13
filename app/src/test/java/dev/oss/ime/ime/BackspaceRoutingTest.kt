@@ -1,26 +1,50 @@
 package dev.oss.ime.ime
 
+import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
 /**
- * Both predicates are covered exhaustively. They take two and three values, so the whole truth
+ * Both routing rules are covered exhaustively. They take four and three values, so the whole truth
  * table is small enough to state outright — and a routing rule with an untested row is a rule
  * nobody notices breaking.
  */
 class BackspaceRoutingTest {
 
-    // --- shouldDeleteFromEditor ------------------------------------------------------------
+    // --- editorDeletion --------------------------------------------------------------------
 
     @Test
     fun finalComposingCharacterDoesNotFallThroughToEditorDeletion() {
-        assertFalse(BackspaceRouting.shouldDeleteFromEditor(hadComposition = true))
+        assertEquals(
+            EditorDeletion.NONE,
+            BackspaceRouting.editorDeletion(hadComposition = true, hasSelection = false),
+        )
+    }
+
+    /** Still mozc's key. Whatever the editor thinks is selected, the composition goes first. */
+    @Test
+    fun compositionOutranksASelection() {
+        assertEquals(
+            EditorDeletion.NONE,
+            BackspaceRouting.editorDeletion(hadComposition = true, hasSelection = true),
+        )
     }
 
     @Test
-    fun idleBackspaceDeletesFromEditor() {
-        assertTrue(BackspaceRouting.shouldDeleteFromEditor(hadComposition = false))
+    fun idleBackspaceDeletesTheCharacterBeforeTheCursor() {
+        assertEquals(
+            EditorDeletion.PRECEDING_CHARACTER,
+            BackspaceRouting.editorDeletion(hadComposition = false, hasSelection = false),
+        )
+    }
+
+    @Test
+    fun highlightedTextGoesWholeRatherThanOneCharacter() {
+        assertEquals(
+            EditorDeletion.SELECTION,
+            BackspaceRouting.editorDeletion(hadComposition = false, hasSelection = true),
+        )
     }
 
     // --- shouldRemoveOldEditorComposition --------------------------------------------------

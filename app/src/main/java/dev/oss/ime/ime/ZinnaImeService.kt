@@ -415,8 +415,19 @@ class ZinnaImeService : InputMethodService() {
         // returns an empty Mozc state, but that must not turn the same key into an editor delete.
         val hadComposition = isComposing
         val state = session.sendSpecialKey(KeyEvent.SpecialKey.BACKSPACE)
-        if (BackspaceRouting.shouldDeleteFromEditor(hadComposition)) {
-            currentInputConnection?.deleteSurroundingText(1, 0)
+        val ic = currentInputConnection
+        if (ic != null) {
+            // Asked rather than remembered: the editor moves its own selection — a long-press, a
+            // drag of the handles, Select All from its own menu — and only some of that reaches
+            // onUpdateSelection. A null answer means the editor will not say, so the ordinary
+            // single-character delete stands.
+            val hasSelection = !ic.getSelectedText(0).isNullOrEmpty()
+            when (BackspaceRouting.editorDeletion(hadComposition, hasSelection)) {
+                EditorDeletion.NONE -> Unit
+                // Committing empty text is what replaces a selection; deleting around it would not.
+                EditorDeletion.SELECTION -> ic.commitText("", 1)
+                EditorDeletion.PRECEDING_CHARACTER -> ic.deleteSurroundingText(1, 0)
+            }
         }
         render(state)
     }
