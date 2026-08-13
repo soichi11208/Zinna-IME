@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <input-method xmlns:android="http://schemas.android.com/apk/res/android"
-    android:settingsActivity="dev.oss.ime.settings.SettingsActivity"
+    android:settingsActivity="io.github.soichi11208.zinna.settings.SettingsActivity"
     android:supportsSwitchingToNextInputMethod="true">
     <subtype
         android:label="@string/subtype_ja"

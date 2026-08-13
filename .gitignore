@@ -12,6 +12,12 @@ local.properties
 /mozc/src/main/jniLibs/
 /mozc/src/main/assets/mozc.data
 
+# Release signing. The key can never be replaced once anything is published under it, so it lives
+# outside the repository entirely and keystore.properties only points at it.
+keystore.properties
+*.jks
+*.keystore
+
 # IDE
 .idea/
 *.iml

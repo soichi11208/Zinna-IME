@@ -22,7 +22,7 @@ package com.google.android.apps.inputmethod.libs.mozc.session;
  * throw {@link UnsatisfiedLinkError} on that one method and register the other three normally.
  *
  * <p>This class is deliberately package-visible plumbing only. Application code should go through
- * {@code dev.oss.ime.mozc.MozcEngine}, which owns the lifecycle and threading rules.
+ * {@code io.github.soichi11208.zinna.mozc.MozcEngine}, which owns the lifecycle and threading rules.
  */
 public final class MozcJNI {
 
@@ -37,7 +37,7 @@ public final class MozcJNI {
     /**
      * Supplies the key for mozc's encrypted storage. Must be called before {@link #onPostLoad}.
      *
-     * @param key exactly 32 bytes; see {@code dev.oss.ime.mozc.MozcProfileKey}
+     * @param key exactly 32 bytes; see {@code io.github.soichi11208.zinna.mozc.MozcProfileKey}
      * @return false if the native side rejected it
      */
     public static native boolean setEncryptionKey(byte[] key);

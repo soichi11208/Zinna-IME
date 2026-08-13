@@ -1,3 +1,5 @@
+import java.util.Properties
+
 plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.android)
@@ -5,20 +7,43 @@ plugins {
     alias(libs.plugins.kotlin.serialization)
 }
 
+/**
+ * Release signing, kept out of the repository.
+ *
+ * Read from `keystore.properties` in the project root, which is gitignored along with the key
+ * itself. When it is absent — a fresh clone, or anyone building from source — the release variant
+ * still assembles, just unsigned, so a missing private key never blocks a build.
+ */
+val signing = rootProject.file("keystore.properties").takeIf { it.isFile }?.let { file ->
+    Properties().apply { file.inputStream().use { load(it) } }
+}
+
 android {
-    namespace = "dev.oss.ime"
+    namespace = "io.github.soichi11208.zinna"
     compileSdk = 35
 
     defaultConfig {
-        applicationId = "dev.oss.ime"
+        applicationId = "io.github.soichi11208.zinna"
         minSdk = 24
         targetSdk = 35
-        versionCode = 5
-        versionName = "0.0.5"
+        versionCode = 10
+        versionName = "0.1.0"
+    }
+
+    signingConfigs {
+        if (signing != null) {
+            create("release") {
+                storeFile = file(signing.getProperty("storeFile"))
+                storePassword = signing.getProperty("storePassword")
+                keyAlias = signing.getProperty("keyAlias")
+                keyPassword = signing.getProperty("keyPassword")
+            }
+        }
     }
 
     buildTypes {
         release {
+            signingConfig = signingConfigs.findByName("release")
             isMinifyEnabled = true
             isShrinkResources = true
             proguardFiles(
