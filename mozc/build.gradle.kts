@@ -25,6 +25,11 @@ android {
         }
     }
 
+    // ProfileBackup's path rules log what they reject, and android.util.Log is an empty stub off
+    // the device. Returning defaults lets the rules themselves be tested without pulling in a
+    // framework simulator for the sake of one call.
+    testOptions.unitTests.isReturnDefaultValues = true
+
     sourceSets["main"].jniLibs.srcDirs("src/main/jniLibs")
     sourceSets["main"].assets.srcDirs("src/main/assets")
 

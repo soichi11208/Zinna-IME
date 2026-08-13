@@ -58,6 +58,8 @@ object ProfileBackup {
     private const val ENTRY_DICTIONARY = "user_dictionary.tsv"
     private const val ENTRY_PROFILE_KEY = "profile_key"
     private const val PROFILE_PREFIX = "mozc/"
+    private const val PREFS_PREFIX = "prefs/"
+    private const val FILES_PREFIX = "files/"
 
     private const val STAGED_FILE = "pending_restore.enc"
 
@@ -101,10 +103,26 @@ object ProfileBackup {
     }
 
     /**
+     * The app's own settings, which this module knows nothing about.
+     *
+     * Passed in rather than hard-coded here so the names stay owned by the classes that define
+     * them — [dev.oss.ime.settings.ImeSettings] and the layout repository live in the app module,
+     * which this one cannot see. Restoring needs no such list: it puts back whatever the archive
+     * turns out to contain.
+     *
+     * @param preferences names of SharedPreferences files.
+     * @param directories paths under `filesDir`, copied whole.
+     */
+    data class Extras(
+        val preferences: List<String> = emptyList(),
+        val directories: List<String> = emptyList(),
+    )
+
+    /**
      * Builds the archive. Returns null if there is nothing to back up or the key is unreadable —
      * writing a file that silently omits the history would be worse than refusing.
      */
-    fun export(context: Context, passphrase: CharArray): ByteArray? {
+    fun export(context: Context, passphrase: CharArray, extras: Extras = Extras()): ByteArray? {
         val app = context.applicationContext
         val profileKey = MozcProfileKey.sealedKey(app)
         if (profileKey == null) {
@@ -128,6 +146,17 @@ object ProfileBackup {
             zip.write(ENTRY_PROFILE_KEY, profileKey)
             for (file in profileFiles(app)) {
                 zip.write(PROFILE_PREFIX + file.name, file.readBytes())
+            }
+
+            for (name in extras.preferences) {
+                zip.write(PREFS_PREFIX + name + ".json", preferencesAsJson(app, name).toByteArray())
+            }
+            for (directory in extras.directories) {
+                val root = File(app.filesDir, directory)
+                for (file in root.walkTopDown().filter { it.isFile }) {
+                    val relative = file.toRelativeString(app.filesDir).replace(File.separatorChar, '/')
+                    zip.write(FILES_PREFIX + relative, file.readBytes())
+                }
             }
         }
         return seal(payload.toByteArray(), passphrase)
@@ -224,12 +253,99 @@ object ProfileBackup {
                 if (leaf in NOT_BACKED_UP) continue
                 File(profileDir, leaf).writeBytes(bytes)
             }
+
+            for ((name, bytes) in entries) {
+                when {
+                    name.startsWith(PREFS_PREFIX) ->
+                        restorePreferences(
+                            context,
+                            name.removePrefix(PREFS_PREFIX).removeSuffix(".json"),
+                            bytes,
+                        )
+                    name.startsWith(FILES_PREFIX) ->
+                        restoreFile(context.filesDir, name.removePrefix(FILES_PREFIX), bytes)
+                }
+            }
             Log.i(TAG, "restore applied")
         } catch (e: Exception) {
             Log.e(TAG, "restore failed", e)
         } finally {
             staged.delete()
         }
+    }
+
+    // --- the app's own settings ----------------------------------------------------------------
+
+    /**
+     * SharedPreferences as JSON, each value tagged with its type.
+     *
+     * The type has to travel: JSON cannot tell 1 from 1.0, and `getFloat` on a key written as an
+     * Int throws rather than converting, which would take the settings screen down on the next
+     * read. Anything of an unexpected type is dropped instead of guessed at.
+     */
+    private fun preferencesAsJson(context: Context, name: String): String {
+        val prefs = context.getSharedPreferences(name, Context.MODE_PRIVATE)
+        val out = JSONObject()
+        for ((key, value) in prefs.all) {
+            val entry = JSONObject()
+            when (value) {
+                is Boolean -> entry.put("type", "boolean").put("value", value)
+                is Float -> entry.put("type", "float").put("value", value.toDouble())
+                is Int -> entry.put("type", "int").put("value", value)
+                is Long -> entry.put("type", "long").put("value", value)
+                is String -> entry.put("type", "string").put("value", value)
+                else -> {
+                    Log.w(TAG, "not backing up $key: ${value?.javaClass?.simpleName}")
+                    continue
+                }
+            }
+            out.put(key, entry)
+        }
+        return out.toString()
+    }
+
+    /** Replaces the store wholesale, so a setting turned off since the backup goes back to off. */
+    private fun restorePreferences(context: Context, name: String, json: ByteArray) {
+        if (name.isEmpty() || name.contains('/') || name.contains("..")) {
+            Log.w(TAG, "skipping suspicious preferences name '$name'")
+            return
+        }
+        val parsed = runCatching { JSONObject(String(json)) }.getOrElse {
+            Log.e(TAG, "preferences $name are not readable", it)
+            return
+        }
+        val editor = context.getSharedPreferences(name, Context.MODE_PRIVATE).edit().clear()
+        for (key in parsed.keys()) {
+            val entry = parsed.optJSONObject(key) ?: continue
+            when (entry.optString("type")) {
+                "boolean" -> editor.putBoolean(key, entry.getBoolean("value"))
+                "float" -> editor.putFloat(key, entry.getDouble("value").toFloat())
+                "int" -> editor.putInt(key, entry.getInt("value"))
+                "long" -> editor.putLong(key, entry.getLong("value"))
+                "string" -> editor.putString(key, entry.getString("value"))
+                else -> Log.w(TAG, "skipping $key: unknown type")
+            }
+        }
+        // Committed, not applied: the process is about to hand control to the engine, and an
+        // asynchronous write could still be in flight when the keyboard reads these back.
+        editor.commit()
+    }
+
+    /** Internal so the path rules can be tested; they are the archive's one way out of bounds. */
+    internal fun restoreFile(filesDir: File, relative: String, bytes: ByteArray) {
+        // An archive is an untrusted file even when the user chose it, and a path is the one field
+        // in it that can reach outside where it belongs.
+        if (relative.isEmpty() || relative.startsWith('/') || relative.split('/').any { it == ".." }) {
+            Log.w(TAG, "skipping suspicious path '$relative'")
+            return
+        }
+        val target = File(filesDir, relative)
+        if (!target.canonicalPath.startsWith(filesDir.canonicalPath + File.separator)) {
+            Log.w(TAG, "skipping '$relative': lands outside the files directory")
+            return
+        }
+        target.parentFile?.mkdirs()
+        target.writeBytes(bytes)
     }
 
     // --- archive format ------------------------------------------------------------------------

@@ -128,11 +128,12 @@ class ImeSettings(context: Context) {
     }
 
     companion object {
-        private const val NAME = "ime_settings"
+        /** Also the name [dev.oss.ime.mozc.ProfileBackup] stores these under. */
+        const val NAME = "ime_settings"
         private const val KEY_PURE_BLACK = "pure_black"
         private const val KEY_BACKGROUND_OPACITY = "background_opacity"
         private const val KEY_REVISION = "revision"
-        private const val BACKGROUND_DIR = "backgrounds"
+        const val BACKGROUND_DIR = "backgrounds"
         private const val BACKGROUND_FILE = "keyboard_background"
         private const val KEY_HEIGHT_SCALE = "key_height_scale"
         private const val KEY_KEYBOARD_STYLE = "keyboard_style"

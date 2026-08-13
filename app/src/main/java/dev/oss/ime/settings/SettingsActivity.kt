@@ -164,7 +164,7 @@ private fun BackupCard() {
         val phrase = passphrase.toCharArray()
         passphrase = ""
         if (uri == null) return@rememberLauncherForActivityResult
-        val archive = ProfileBackup.export(context, phrase)
+        val archive = ProfileBackup.export(context, phrase, BACKUP_EXTRAS)
         message = if (archive == null) {
             "書き出せませんでした。キーボードを一度使ってから試してください"
         } else {
@@ -207,8 +207,8 @@ private fun BackupCard() {
         Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             Text("バックアップ", style = MaterialTheme.typography.titleMedium)
             Text(
-                "ユーザー辞書と、変換の学習内容を1つのファイルにまとめます。打った内容そのものなので、" +
-                    "パスフレーズで暗号化します。忘れると復元できません",
+                "ユーザー辞書・変換の学習内容・キーボードの設定を1つのファイルにまとめます。" +
+                    "打った内容そのものを含むので、パスフレーズで暗号化します。忘れると復元できません",
                 style = MaterialTheme.typography.bodySmall,
             )
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -308,6 +308,19 @@ private fun BackupCard() {
 private enum class Pending { EXPORT, IMPORT }
 
 private const val BACKUP_MIME = "application/octet-stream"
+
+/**
+ * Everything outside mozc's own profile that the user chose rather than typed: the settings, the
+ * background image they picked, and any layout or theme they dropped in by hand.
+ */
+private val BACKUP_EXTRAS = ProfileBackup.Extras(
+    preferences = listOf(ImeSettings.NAME),
+    directories = listOf(
+        ImeSettings.BACKGROUND_DIR,
+        LayoutRepository.LAYOUTS_DIR,
+        LayoutRepository.THEMES_DIR,
+    ),
+)
 
 /** Short enough not to be a chore, long enough that PBKDF2 has something to work with. */
 private const val MIN_PASSPHRASE = 8
