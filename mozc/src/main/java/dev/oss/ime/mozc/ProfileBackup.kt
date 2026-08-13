@@ -62,12 +62,19 @@ object ProfileBackup {
     private const val STAGED_FILE = "pending_restore.enc"
 
     /**
-     * Files in the profile directory that describe a running server rather than the user.
+     * Profile files that must not travel, for two different reasons.
      *
-     * Restoring a lock or a socket path from another device would at best be ignored and at worst
-     * point mozc at something that is not there.
+     * The lock, the socket path and the registry describe a running server rather than the user;
+     * restoring them from another device would at best be ignored and at worst point mozc at
+     * something that is not there.
+     *
+     * `.encrypt_key.db` is mozc's own plain-text key file. This build does not write one, but an
+     * older one did and [MozcProfileKey] only deletes it once — if that delete ever failed, the
+     * file is still sitting there, and copying it into a backup would put a plain-text key beside
+     * the data it unlocks in a file meant to leave the device.
      */
-    private val TRANSIENT = setOf(".server.lock", ".session.ipc", ".registry.db")
+    private val NOT_BACKED_UP =
+        setOf(".server.lock", ".session.ipc", ".registry.db", ".encrypt_key.db")
 
     /** Largest archive we will unpack, so a hostile file cannot exhaust storage. */
     private const val MAX_ENTRY_BYTES = 64L * 1024 * 1024
@@ -214,7 +221,7 @@ object ProfileBackup {
                     Log.w(TAG, "skipping suspicious entry $name")
                     continue
                 }
-                if (leaf in TRANSIENT) continue
+                if (leaf in NOT_BACKED_UP) continue
                 File(profileDir, leaf).writeBytes(bytes)
             }
             Log.i(TAG, "restore applied")
@@ -317,7 +324,7 @@ object ProfileBackup {
 
     private fun profileFiles(context: Context): List<File> =
         File(context.filesDir, MozcEngine.PROFILE_DIR).listFiles()
-            ?.filter { it.isFile && it.name !in TRANSIENT }
+            ?.filter { it.isFile && it.name !in NOT_BACKED_UP }
             .orEmpty()
 
     private fun appVersion(context: Context): String = runCatching {
