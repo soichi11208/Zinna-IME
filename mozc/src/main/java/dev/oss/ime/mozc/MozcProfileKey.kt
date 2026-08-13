@@ -52,6 +52,31 @@ internal object MozcProfileKey {
         }
     }
 
+    /**
+     * The raw key, for [ProfileBackup] alone.
+     *
+     * Deliberately does not fall back to generating one: a backup taken before the engine has ever
+     * run would seal a key nothing was encrypted under, and restoring it would throw away whatever
+     * history the target device already had.
+     */
+    internal fun sealedKey(context: Context): ByteArray? =
+        SecureStore.readBytes(File(context.applicationContext.filesDir, SEALED_FILE))
+            ?.takeIf { it.size == KEY_SIZE }
+
+    /**
+     * Replaces the key with one out of a backup, so the restored history can be read.
+     *
+     * Whatever was encrypted under the old key becomes unreadable, which is what restoring means —
+     * the caller has already replaced that data.
+     */
+    internal fun replaceSealedKey(context: Context, key: ByteArray): Boolean {
+        if (key.size != KEY_SIZE) {
+            Log.e(TAG, "restored key is ${key.size} bytes, expected $KEY_SIZE")
+            return false
+        }
+        return SecureStore.writeBytes(File(context.applicationContext.filesDir, SEALED_FILE), key)
+    }
+
     private fun load(context: Context, profileDir: File): ByteArray? {
         val sealed = File(context.filesDir, SEALED_FILE)
         SecureStore.readBytes(sealed)?.let { existing ->

@@ -45,6 +45,19 @@ class UserDictionary(context: Context) {
         }.onFailure { Log.e(TAG, "cannot read $FILE_NAME", it) }.getOrDefault(emptyList())
     }
 
+    /** The list as mozc's own TSV, or null when there is nothing stored. See [ProfileBackup]. */
+    fun exportTsv(): String? = SecureStore.read(file)
+
+    /**
+     * Replaces the whole list with [tsv], as restoring a backup does.
+     *
+     * Does not push the result into mozc: this runs during start-up, before the engine exists, and
+     * the start-up path syncs immediately afterwards anyway.
+     */
+    fun importTsv(tsv: String) {
+        SecureStore.write(file, tsv)
+    }
+
     /** Appends [entry], or replaces the one at [replacing] when editing. */
     fun save(entry: Entry, replacing: Entry? = null): List<Entry> {
         val sanitized = entry.sanitized() ?: return entries()

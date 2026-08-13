@@ -103,6 +103,9 @@ class MozcEngine private constructor() {
         private const val INVALID_SESSION_ID = 0L
         private const val DATA_ASSET = "mozc.data"
 
+        /** Where mozc keeps everything it learns, under the app's own files directory. */
+        internal const val PROFILE_DIR = "mozc"
+
         @Volatile
         private var instance: MozcEngine? = null
 
@@ -134,8 +137,13 @@ class MozcEngine private constructor() {
                 return null
             }
 
-            val profileDir = File(context.filesDir, "mozc").apply { mkdirs() }
+            val profileDir = File(context.filesDir, PROFILE_DIR).apply { mkdirs() }
             val dataFile = extractDataFile(context) ?: return null
+
+            // Before the key is installed and long before the engine opens anything: a restore
+            // brings its own key, and mozc writes the history back on its own schedule, so any
+            // later moment would either read under the wrong key or be overwritten.
+            ProfileBackup.applyStagedRestore(context, profileDir)
 
             // Before onPostLoad, not after: building the engine reads the conversion history, and
             // mozc needs the key in hand to decrypt it. Carrying on without it is deliberate — the

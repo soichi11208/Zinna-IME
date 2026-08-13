@@ -18,6 +18,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.HorizontalDivider
@@ -36,13 +37,16 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
 import dev.oss.ime.keyboard.FlickGuideStyle
 import dev.oss.ime.keyboard.KeyboardStyle
 import dev.oss.ime.keyboard.LayoutRepository
 import dev.oss.ime.mozc.MozcEngine
+import dev.oss.ime.mozc.ProfileBackup
 import dev.oss.ime.mozc.UserDictionary
 import dev.oss.ime.theme.ZinnaTheme
+import kotlin.system.exitProcess
 
 /**
  * Setup and status screen.
@@ -87,6 +91,8 @@ private fun SettingsScreen(modifier: Modifier = Modifier) {
         InfoCard(title = "テーマ", body = themes.joinToString(", ").ifEmpty { "(なし)" })
 
         UserDictionaryCard()
+
+        BackupCard()
 
         KeyboardCard()
 
@@ -137,6 +143,174 @@ private fun UserDictionaryCard() {
         }
     }
 }
+
+/**
+ * Export and import of everything the user cannot recreate. See [ProfileBackup].
+ *
+ * The passphrase is asked for before the file picker opens, so a mistyped one is caught while the
+ * user still remembers what they meant to type rather than after a file has been written.
+ */
+@Composable
+private fun BackupCard() {
+    val context = LocalContext.current
+    var pending by remember { mutableStateOf<Pending?>(null) }
+    var passphrase by remember { mutableStateOf("") }
+    var message by remember { mutableStateOf<String?>(null) }
+    var restorePending by remember { mutableStateOf(ProfileBackup.hasStagedRestore(context)) }
+
+    val save = rememberLauncherForActivityResult(
+        ActivityResultContracts.CreateDocument(BACKUP_MIME)
+    ) { uri ->
+        val phrase = passphrase.toCharArray()
+        passphrase = ""
+        if (uri == null) return@rememberLauncherForActivityResult
+        val archive = ProfileBackup.export(context, phrase)
+        message = if (archive == null) {
+            "書き出せませんでした。キーボードを一度使ってから試してください"
+        } else {
+            runCatching {
+                context.contentResolver.openOutputStream(uri)?.use { it.write(archive) }
+                    ?: error("no stream")
+                "書き出しました"
+            }.getOrElse { "保存できませんでした: ${it.message}" }
+        }
+    }
+
+    val load = rememberLauncherForActivityResult(
+        ActivityResultContracts.OpenDocument()
+    ) { uri ->
+        val phrase = passphrase.toCharArray()
+        passphrase = ""
+        if (uri == null) return@rememberLauncherForActivityResult
+        val bytes = runCatching {
+            context.contentResolver.openInputStream(uri)?.use { it.readBytes() }
+        }.getOrNull()
+        message = if (bytes == null) {
+            "ファイルを読めませんでした"
+        } else {
+            when (val result = ProfileBackup.stageRestore(context, bytes, phrase)) {
+                ProfileBackup.Result.Ok -> {
+                    restorePending = true
+                    "読み込みました。反映するにはアプリを終了して開き直してください"
+                }
+                ProfileBackup.Result.NotABackup -> "このファイルはバックアップではありません"
+                ProfileBackup.Result.WrongPassphrase ->
+                    "パスフレーズが違うか、ファイルが壊れています"
+                is ProfileBackup.Result.TooNew ->
+                    "新しいバージョンのアプリで作られたバックアップです (形式 ${result.format})"
+                is ProfileBackup.Result.Failed -> result.message
+            }
+        }
+    }
+
+    Card(modifier = Modifier.fillMaxWidth()) {
+        Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            Text("バックアップ", style = MaterialTheme.typography.titleMedium)
+            Text(
+                "ユーザー辞書と、変換の学習内容を1つのファイルにまとめます。打った内容そのものなので、" +
+                    "パスフレーズで暗号化します。忘れると復元できません",
+                style = MaterialTheme.typography.bodySmall,
+            )
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                Button(
+                    onClick = { pending = Pending.EXPORT },
+                    modifier = Modifier.weight(1f),
+                ) { Text("書き出す") }
+                OutlinedButton(
+                    onClick = { pending = Pending.IMPORT },
+                    modifier = Modifier.weight(1f),
+                ) { Text("読み込む") }
+            }
+            if (restorePending) {
+                Text(
+                    "復元待ちです。学習内容はキーボードが動いている間ずっと書き戻されるので、" +
+                        "一度終了させないと上書きされてしまいます",
+                    style = MaterialTheme.typography.bodySmall,
+                )
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Button(
+                        // Ends this process, keyboard included. Android starts the input method
+                        // again the next time a text field is focused, and that start is what
+                        // unpacks the restore.
+                        onClick = { exitProcess(0) },
+                        modifier = Modifier.weight(1f),
+                    ) { Text("終了して反映") }
+                    OutlinedButton(
+                        onClick = {
+                            ProfileBackup.discardStagedRestore(context)
+                            restorePending = false
+                            message = "復元を取り消しました"
+                        },
+                        modifier = Modifier.weight(1f),
+                    ) { Text("取り消す") }
+                }
+            }
+            message?.let { Text(it, style = MaterialTheme.typography.bodyMedium) }
+        }
+    }
+
+    pending?.let { what ->
+        // Twice for an export, because a typo in a passphrase nobody has typed before is only
+        // discovered when the backup is needed — by which time it is too late to matter.
+        var confirmation by remember(what) { mutableStateOf("") }
+        val exporting = what == Pending.EXPORT
+        val ready = passphrase.length >= MIN_PASSPHRASE &&
+            (!exporting || confirmation == passphrase)
+
+        AlertDialog(
+            onDismissRequest = { pending = null; passphrase = "" },
+            title = { Text(if (exporting) "バックアップを書き出す" else "バックアップを読み込む") },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    OutlinedTextField(
+                        value = passphrase,
+                        onValueChange = { passphrase = it },
+                        label = { Text("パスフレーズ") },
+                        singleLine = true,
+                        visualTransformation = PasswordVisualTransformation(),
+                        modifier = Modifier.fillMaxWidth(),
+                    )
+                    if (exporting) {
+                        OutlinedTextField(
+                            value = confirmation,
+                            onValueChange = { confirmation = it },
+                            label = { Text("もう一度") },
+                            singleLine = true,
+                            visualTransformation = PasswordVisualTransformation(),
+                            modifier = Modifier.fillMaxWidth(),
+                        )
+                        Text(
+                            "$MIN_PASSPHRASE 文字以上。このパスフレーズなしでは誰も — 私たちも — " +
+                                "中身を読めません",
+                            style = MaterialTheme.typography.bodySmall,
+                        )
+                    }
+                }
+            },
+            confirmButton = {
+                Button(
+                    enabled = ready,
+                    onClick = {
+                        pending = null
+                        message = null
+                        if (exporting) save.launch(ProfileBackup.suggestedFileName())
+                        else load.launch(arrayOf("*/*"))
+                    },
+                ) { Text("続ける") }
+            },
+            dismissButton = {
+                OutlinedButton(onClick = { pending = null; passphrase = "" }) { Text("やめる") }
+            },
+        )
+    }
+}
+
+private enum class Pending { EXPORT, IMPORT }
+
+private const val BACKUP_MIME = "application/octet-stream"
+
+/** Short enough not to be a chore, long enough that PBKDF2 has something to work with. */
+private const val MIN_PASSPHRASE = 8
 
 /**
  * How the keyboard is laid out and how big it is — choices about the input surface rather than
