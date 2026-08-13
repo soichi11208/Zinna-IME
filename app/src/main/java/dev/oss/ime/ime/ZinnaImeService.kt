@@ -8,6 +8,8 @@ import android.text.style.UnderlineSpan
 import android.util.Log
 import android.view.View
 import android.view.inputmethod.EditorInfo
+import android.view.inputmethod.ExtractedTextRequest
+import android.view.inputmethod.InputConnection
 import android.view.inputmethod.InputMethodManager
 import android.widget.LinearLayout
 import androidx.core.view.ViewCompat
@@ -525,6 +527,30 @@ class ZinnaImeService : InputMethodService() {
             settings.flickGuideStyle
         }
 
+    /**
+     * Moves the caret to where mozc put it inside the composition.
+     *
+     * `setComposingText` cannot do this itself: its `newCursorPosition` is measured from outside
+     * the span — past its end for a positive value, before its start for anything else — so the
+     * one place it cannot leave the caret is in the middle. Pressing ◀ over a half-typed word
+     * therefore moved mozc's cursor while the editor kept drawing the caret at the end, and the
+     * next keystroke appeared somewhere the user was not looking.
+     *
+     * Only runs when the caret is not already at the end, which is every ordinary keystroke, so
+     * typing pays nothing for it. Must follow `endBatchEdit`, or the position read back is the one
+     * from before this render.
+     */
+    private fun placeComposingCaret(ic: InputConnection, state: MozcSession.State) {
+        if (state.preedit.isEmpty() || state.preeditCursor >= state.preedit.length) return
+        val extracted = ic.getExtractedText(ExtractedTextRequest(), 0) ?: return
+        // setComposingText left the caret just past the composition, which is the only fixed point
+        // we can measure its start from — the editor never tells us where it put the span.
+        val start = extracted.startOffset + extracted.selectionStart - state.preedit.length
+        if (start < 0) return
+        val target = start + state.preeditCursor
+        ic.setSelection(target, target)
+    }
+
     private fun render(state: MozcSession.State?) {
         val ic = currentInputConnection ?: return
         if (state == null) {
@@ -557,6 +583,8 @@ class ZinnaImeService : InputMethodService() {
             ic.setComposingText(styled, 1)
         }
         ic.endBatchEdit()
+
+        placeComposingCaret(ic, state)
 
         isComposing = state.hasComposition
         lastState = state
