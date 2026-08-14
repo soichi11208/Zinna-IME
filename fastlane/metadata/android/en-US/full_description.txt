@@ -1,0 +1,37 @@
+An open-source Japanese input method for Android.
+
+Conversion is mozc — the engine behind Google Japanese Input's open-source release — compiled
+natively into the app rather than reached over a network. The app declares no permissions at all,
+INTERNET included, so nothing you type can leave the device even if a future dependency wanted it
+to.
+
+<b>Input</b>
+
+* Flick, QWERTY, or kana on flick with the alphabet on QWERTY
+* A second symbol plane for brackets, arrows, maths and typographic marks
+* While a key is held, either a preview of what releasing will type or the full cross of four
+  directions — and the symbol plane can always show the cross, since nobody memorises where ※ is
+* Repeated presses of one key type the same character rather than cycling through it
+
+<b>Conversion</b>
+
+* Rule-based correction for mistyped readings, aware of where the keys actually sit on the flick
+  layout: a slip within one key is treated as likelier than a hit on the neighbour
+* Candidates that convert exactly what you typed are ranked ahead of guesses about what you have
+  not finished typing
+* Bundled dictionaries covering Niconico and Pixiv article titles, katakana loanwords with their
+  English spellings, and Wikipedia headings
+
+<b>Your data</b>
+
+* The conversion history and your own dictionary are encrypted with a key held in the Android
+  Keystore, which on devices with a secure element cannot be extracted at all
+* Everything you cannot recreate — your dictionary, what the engine has learned, your settings —
+  exports to a single file sealed under a passphrase you choose, and imports back on any device
+* Clipboard history stays on the device and skips anything the source marked sensitive
+
+<b>Appearance</b>
+
+* Themes and keyboard layouts are plain JSON files you can replace
+* Dark mode, Material You, a background image of your own, adjustable key height, pure black for
+  OLED panels

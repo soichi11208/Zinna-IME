@@ -1,0 +1,2 @@
+- Keys are a little taller by default. If you have moved the height slider
+  yourself, your own setting is untouched.

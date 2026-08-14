@@ -9,7 +9,7 @@ data the user can replace.
 Named after the zinnia `scripts/gen_launcher_icon.py` generates both the vector
 and the raster icons from a single description of the flower.
 
-Fully offline.onversion runs entirely against the on-device `libmozc.so` and the bundled
+Fully offline. Conversion runs entirely against the on-device `libmozc.so` and the bundled
 `mozc.data`. `AndroidManifest.xml` declares no `uses-permission` at all, so there is no route to
 the network even if a future dependency wanted one.
 

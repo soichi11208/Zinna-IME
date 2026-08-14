@@ -1,0 +1,63 @@
+// Draft of the fdroiddata metadata for this app. Kept here so it is versioned alongside the build
+// it describes; submitting means copying it into fdroiddata/metadata/ and opening a merge request.
+//
+// The unusual part is `sudo` and the length of `prebuild`. mozc is a bazel project, and bazel is
+// normally installed as a prebuilt binary, which the inclusion policy does not allow. Debian's
+// bazel is 7.7.1 — two majors behind what mozc pins, and unable to resolve mozc's module graph at
+// all. So bazel is built from its own distribution archive, which needs no bazel to build. See
+// scripts/bootstrap_bazel.sh for why that archive and not a git checkout.
+
+Categories:
+  - Writing
+License: Apache-2.0
+AuthorName: soichi11208
+SourceCode: https://github.com/soichi11208/Zinna-IME
+IssueTracker: https://github.com/soichi11208/Zinna-IME/issues
+
+AutoName: zinna-IME
+
+RepoType: git
+Repo: https://github.com/soichi11208/Zinna-IME.git
+
+Builds:
+  - versionName: 0.1.1
+    versionCode: 11
+    commit: 0.1.1
+    subdir: app
+    sudo:
+      # Everything the bazel bootstrap links against comes from Debian. bazel's own compile.sh
+      # reads tools/distributions/debian/debian_java.BUILD and looks under /usr/share/java, so this
+      # list is upstream's, not ours.
+      - apt-get update
+      - apt-get install -y default-jdk-headless python3 unzip curl
+    gradle:
+      - yes
+    prebuild:
+      # Runs from `subdir`, so everything is relative to the repository root one level up.
+      - cd ..
+      # bazel, from source, using no bazel.
+      - ./scripts/bootstrap_bazel.sh
+      # Supplementary dictionaries. Every source is pinned to a commit and hash-checked.
+      - ./scripts/fetch_dictionaries.sh
+      # libmozc.so and mozc.data. This also clones mozc at the commit the script pins and applies
+      # patches/ to it. ANDROID_NDK_HOME makes mozc use the NDK F-Droid supplies instead of
+      # downloading r29 itself; measured working with 27.2.12479018.
+      - ANDROID_NDK_HOME=$$NDK$$ ./scripts/build_mozc.sh
+    ndk: 27.2.12479018
+
+AutoUpdateMode: Version %v
+# Unprefixed, matching 0.0.2 onwards. Anchoring on a digit also skips the one stray
+# v0.0.1-arm64 tag, which was a one-off build artefact rather than a release.
+UpdateCheckMode: Tags ^[0-9]
+
+# Notes for the merge request, not part of the metadata:
+#
+# * The build downloads three things: bazel's distribution archive, mozc, and the dictionaries.
+#   All are pinned — by SHA-256 for the archive and the two dictionary files, by commit for mozc
+#   and for the third dictionary — so a rebuild of the same tag produces the same bytes.
+# * bazel's distribution archive carries `derived/src/java`: Java sources generated from bazel's
+#   own protos, shipped already generated. Generating them instead is not possible from the public
+#   tree, which is missing a Google-internal proto that one of bazel's own protos imports.
+# * It also carries `derived/maven`, third-party Java libraries from Maven Central, and
+#   `derived/jars`, code bazel generated from protos that are in the same archive.
+# * The app declares no permissions, INTERNET included.

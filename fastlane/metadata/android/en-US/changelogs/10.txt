@@ -1,0 +1,9 @@
+First signed release, and the first under this package name.
+
+- Back up your dictionary, what the engine has learned, and your settings to one
+  passphrase-sealed file, and restore it on any device
+- A second symbol plane on the flick keyboard, and an option to always show all
+  four directions there
+- Backspace now deletes the whole selection rather than one character in front of it
+- The caret follows the cursor inside an unconverted reading
+- Corrections for mistyped readings are no longer buried below the literal reading

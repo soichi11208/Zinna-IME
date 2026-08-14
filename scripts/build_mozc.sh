@@ -16,11 +16,38 @@ ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 MOZC_SRC="${ROOT}/third_party/mozc/src"
 MODULE="${ROOT}/mozc/src/main"
 
+# Pinned here rather than left to whoever clones: mozc's HEAD moves, and a build of the same tag of
+# this repository has to produce the same engine. Bump deliberately, and re-run the patch stack —
+# patches/ is written against this commit.
+MOZC_COMMIT="3f235b4eb6fcff7d14ef5f0fb8ee56de7ee4c732"
+
 if [[ ! -d "${MOZC_SRC}" ]]; then
-  echo "error: ${MOZC_SRC} not found. Run: git clone --depth 1 https://github.com/google/mozc.git third_party/mozc" >&2
+  echo "==> Cloning mozc at ${MOZC_COMMIT:0:12}"
+  mkdir -p "${ROOT}/third_party/mozc"
+  git -C "${ROOT}/third_party/mozc" init -q
+  git -C "${ROOT}/third_party/mozc" remote add origin https://github.com/google/mozc.git 2>/dev/null || true
+  git -C "${ROOT}/third_party/mozc" fetch -q --depth 1 origin "${MOZC_COMMIT}"
+  git -C "${ROOT}/third_party/mozc" checkout -q FETCH_HEAD
+fi
+
+if [[ ! -d "${MOZC_SRC}" ]]; then
+  echo "error: ${MOZC_SRC} still missing after clone" >&2
   exit 1
 fi
 
+# A tree left at a different commit would take the patches quietly and build something else.
+have="$(git -C "${ROOT}/third_party/mozc" rev-parse HEAD)"
+if [[ "${have}" != "${MOZC_COMMIT}" ]]; then
+  echo "warning: third_party/mozc is at ${have:0:12}, expected ${MOZC_COMMIT:0:12}" >&2
+fi
+
+# A bazel bootstrapped by scripts/bootstrap_bazel.sh wins over whatever is installed: it is the one
+# an F-Droid build will have, and pinned to the version mozc expects. Falling back to PATH keeps a
+# developer machine working without bootstrapping anything.
+BOOTSTRAPPED_BAZEL="${ROOT}/third_party/bazel-dist/output/bazel"
+if [[ -z "${BAZEL:-}" && -x "${BOOTSTRAPPED_BAZEL}" ]]; then
+  BAZEL="${BOOTSTRAPPED_BAZEL}"
+fi
 BAZEL="${BAZEL:-$(command -v bazelisk || command -v bazel)}"
 PYTHON="${PYTHON:-python3}"
 
@@ -57,8 +84,16 @@ else
   : > "${MOZC_SRC}/data/dictionary_oss/dictionary10.txt"
 fi
 
-if [[ ! -d third_party/ndk ]]; then
-  echo "==> Fetching mozc build dependencies (Android NDK r29)"
+# mozc pins NDK r29 and downloads it, which an F-Droid build cannot do: its buildserver supplies
+# the NDK itself and forbids fetching binaries. mozc's own bazel/android_repository.bzl already
+# honours ANDROID_NDK_HOME and switches to android_ndk_repository when it is set, so pointing at a
+# provided NDK needs no patch — and r29 is not actually required. Measured: 27.2.12479018 builds
+# every ABI cleanly.
+if [[ -n "${ANDROID_NDK_HOME:-}" ]]; then
+  echo "==> Using the NDK at ANDROID_NDK_HOME (${ANDROID_NDK_HOME})"
+  export ANDROID_NDK_HOME
+elif [[ ! -d third_party/ndk ]]; then
+  echo "==> No ANDROID_NDK_HOME; fetching mozc's own NDK"
   "${PYTHON}" build_tools/update_deps.py
 fi
 

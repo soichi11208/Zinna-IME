@@ -26,8 +26,8 @@ android {
         applicationId = "io.github.soichi11208.zinna"
         minSdk = 24
         targetSdk = 35
-        versionCode = 10
-        versionName = "0.1.0"
+        versionCode = 11
+        versionName = "0.1.1"
     }
 
     signingConfigs {
@@ -37,6 +37,11 @@ android {
                 storePassword = signing.getProperty("storePassword")
                 keyAlias = signing.getProperty("keyAlias")
                 keyPassword = signing.getProperty("keyPassword")
+                // v2 alone would be enough — it covers everything from API 24, which is our floor.
+                // v3 is what makes key rotation possible later, and it has to be in the signature
+                // from the start: a device that installed a v2-only APK will not accept a rotated
+                // key afterwards. Cheap now, impossible to add retroactively.
+                enableV3Signing = true
             }
         }
     }

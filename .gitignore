@@ -8,6 +8,8 @@ local.properties
 # Vendored / generated
 /tools/
 /third_party/mozc/
+/third_party/bazel-dist/
+/third_party/bazel-*-dist.zip
 !/patches/
 /mozc/src/main/jniLibs/
 /mozc/src/main/assets/mozc.data

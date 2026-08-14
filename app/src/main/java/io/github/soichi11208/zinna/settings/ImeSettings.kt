@@ -40,9 +40,14 @@ class ImeSettings(context: Context) {
      * A scale rather than an absolute height so it composes with whatever theme is active instead
      * of overriding a value the theme author chose. The range stops well short of filling the
      * screen: past that the candidate strip and the editor stop sharing the display usefully.
+     *
+     * Defaults slightly above the theme's own height. The theme value read well in the layout
+     * editor and short in the hand, and 106% is where it stopped feeling cramped without eating
+     * screen. Anyone who has already moved the slider keeps what they chose — this is only the
+     * value for a setting nobody has touched.
      */
     var keyHeightScale: Float
-        get() = prefs.getFloat(KEY_HEIGHT_SCALE, 1f)
+        get() = prefs.getFloat(KEY_HEIGHT_SCALE, DEFAULT_KEY_HEIGHT_SCALE)
         set(value) = prefs.edit()
             .putFloat(KEY_HEIGHT_SCALE, value.coerceIn(MIN_KEY_HEIGHT_SCALE, MAX_KEY_HEIGHT_SCALE))
             .apply()
@@ -140,6 +145,7 @@ class ImeSettings(context: Context) {
         private const val KEY_FLICK_GUIDE = "flick_guide_style"
         private const val KEY_SYMBOL_ALL_DIRECTIONS = "symbol_all_directions"
         const val DEFAULT_BACKGROUND_OPACITY = 0.45f
+        const val DEFAULT_KEY_HEIGHT_SCALE = 1.06f
         const val MIN_KEY_HEIGHT_SCALE = 0.7f
         const val MAX_KEY_HEIGHT_SCALE = 1.5f
     }
