@@ -68,8 +68,13 @@ git -C "${work}/ja-en" checkout -q FETCH_HEAD
 # dictionary, so it also answers 黒 with "black" and そ with the definition of the solfa syllable —
 # which surfaces as English prose in the middle of ordinary Japanese input. See the filter script.
 merged="${work}/merged.txt"
+# LC_ALL is pinned because awk resolves a character range like [ぁ-ゖ] through the locale's
+# collation order, so the same input yields a different set of readings depending on what LANG
+# happens to be — measured at 26,828 entries under ja_JP.UTF-8 and 24,621 under C.UTF-8. A build
+# whose dictionary depends on the builder's locale is not reproducible, which is the whole point
+# of pinning the sources in the first place.
 find "${work}" -path "*Google-ime-jp-カタカナ英語辞典*" -name "*.txt" -exec cat {} + 2>/dev/null |
-  awk -F"\t" 'NF >= 3 && $1 ~ /^[ぁ-ゖー]+$/ && $2 != "" {print $1 "\t" $2 "\t" $3}' |
+  LC_ALL=C.UTF-8 awk -F"\t" 'NF >= 3 && $1 ~ /^[ぁ-ゖー]+$/ && $2 != "" {print $1 "\t" $2 "\t" $3}' |
   "${PYTHON:-python3}" "${ROOT}/scripts/filter_katakana_english.py" > "${merged}"
 
 ja_en_entries="$(wc -l < "${merged}")"

@@ -89,19 +89,38 @@ fi
 # honours ANDROID_NDK_HOME and switches to android_ndk_repository when it is set, so pointing at a
 # provided NDK needs no patch — and r29 is not actually required. Measured: 27.2.12479018 builds
 # every ABI cleanly.
+# mozc's MODULE.bazel registers its Android toolchains from a hard-coded path:
+#
+#   android_ndk_repository_extension.configure(path = ".../third_party/ndk/android-ndk-r29")
+#   register_toolchains("@androidndk//:all")
+#
+# Setting ANDROID_NDK_HOME alone is not enough — that only reaches bazel/android_repository.bzl,
+# while the toolchains come from the path above. With nothing there, analysis fails with "No
+# matching toolchains found", which is easy to mistake for a compiler problem. So a supplied NDK
+# is symlinked into place under the name mozc expects. The name is a lie about the version and
+# that is fine: measured, r27c builds every ABI.
 if [[ -n "${ANDROID_NDK_HOME:-}" ]]; then
   echo "==> Using the NDK at ANDROID_NDK_HOME (${ANDROID_NDK_HOME})"
   export ANDROID_NDK_HOME
+  mkdir -p third_party/ndk
+  if [[ ! -e third_party/ndk/android-ndk-r29 ]]; then
+    ln -s "${ANDROID_NDK_HOME}" third_party/ndk/android-ndk-r29
+  fi
 elif [[ ! -d third_party/ndk ]]; then
   echo "==> No ANDROID_NDK_HOME; fetching mozc's own NDK"
   "${PYTHON}" build_tools/update_deps.py
 fi
 
+# Same reason as in bootstrap_bazel.sh: unthrottled progress output overruns a CI log budget and
+# takes the useful part of the build with it.
+QUIET_PROGRESS=(--curses=no --show_progress_rate_limit=30)
+
 echo "==> Building libmozc.so for all ABIs"
-"${BAZEL}" build package --config oss_android --config release_build
+"${BAZEL}" build package --config oss_android --config release_build "${QUIET_PROGRESS[@]}"
 
 echo "==> Building mozc.data (host config)"
-"${BAZEL}" build //data_manager/oss:mozc.data --config oss_linux --config release_build
+"${BAZEL}" build //data_manager/oss:mozc.data --config oss_linux --config release_build \
+  "${QUIET_PROGRESS[@]}"
 
 echo "==> Staging native libraries"
 rm -rf "${MODULE}/jniLibs"

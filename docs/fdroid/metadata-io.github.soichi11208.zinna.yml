@@ -1,12 +1,3 @@
-// Draft of the fdroiddata metadata for this app. Kept here so it is versioned alongside the build
-// it describes; submitting means copying it into fdroiddata/metadata/ and opening a merge request.
-//
-// The unusual part is `sudo` and the length of `prebuild`. mozc is a bazel project, and bazel is
-// normally installed as a prebuilt binary, which the inclusion policy does not allow. Debian's
-// bazel is 7.7.1 — two majors behind what mozc pins, and unable to resolve mozc's module graph at
-// all. So bazel is built from its own distribution archive, which needs no bazel to build. See
-// scripts/bootstrap_bazel.sh for why that archive and not a git checkout.
-
 Categories:
   - Keyboard & IME
 License: Apache-2.0
@@ -58,15 +49,3 @@ AutoUpdateMode: Version %v
 # Unprefixed, matching 0.0.2 onwards. Anchoring on a digit also skips the one stray
 # v0.0.1-arm64 tag, which was a one-off build artefact rather than a release.
 UpdateCheckMode: Tags ^[0-9]
-
-# Notes for the merge request, not part of the metadata:
-#
-# * The build downloads three things: bazel's distribution archive, mozc, and the dictionaries.
-#   All are pinned — by SHA-256 for the archive and the two dictionary files, by commit for mozc
-#   and for the third dictionary — so a rebuild of the same tag produces the same bytes.
-# * bazel's distribution archive carries `derived/src/java`: Java sources generated from bazel's
-#   own protos, shipped already generated. Generating them instead is not possible from the public
-#   tree, which is missing a Google-internal proto that one of bazel's own protos imports.
-# * It also carries `derived/maven`, third-party Java libraries from Maven Central, and
-#   `derived/jars`, code bazel generated from protos that are in the same archive.
-# * The app declares no permissions, INTERNET included.

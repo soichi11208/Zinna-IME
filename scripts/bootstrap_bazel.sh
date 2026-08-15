@@ -61,9 +61,23 @@ unzip -q "${ARCHIVE}" -d "${DIST_DIR}"
 
 # local_jdk rather than the remote one the archive would otherwise download: the point of this
 # script is to depend on nothing that arrives as a prebuilt binary, and that includes a JDK.
+#
+# The progress flags matter more than they look. bazel redraws its status several times a second,
+# and with curses off every redraw is a fresh block of lines. Left alone this bootstrap alone
+# writes past GitLab's 4 MB log ceiling, after which the rest of the build — including whatever
+# actually goes wrong later — is silently dropped.
 echo "==> Bootstrapping bazel ${BAZEL_VERSION} (this takes a while)"
 cd "${DIST_DIR}"
-env EXTRA_BAZEL_ARGS="--tool_java_runtime_version=local_jdk" bash ./compile.sh
+# -w on top of the progress flags. bazel's own dependencies include grpc, and gcc 14 emits
+# -Wmaybe-uninitialized diagnostics for its templates that run to several thousand characters
+# each; a few hundred of those overrun a CI log budget on their own. Warnings about third-party
+# code nobody here is going to fix are noise either way.
+# A ceiling on how much bazel thinks it may use. Left alone it sizes its own parallelism from the
+# machine, and gcc compiling grpc's templates wants on the order of a gigabyte per action — enough
+# to be killed on a shared runner with four cores and not much more than eight gigabytes. Capping
+# the memory it plans around trades wall-clock for finishing at all.
+env EXTRA_BAZEL_ARGS="--tool_java_runtime_version=local_jdk --curses=no --show_progress_rate_limit=30 --copt=-w --host_copt=-w --local_resources=memory=HOST_RAM*.5" \
+  bash ./compile.sh
 
 # compile.sh exits 0 even when it has produced nothing, so the binary is what gets checked.
 if [[ ! -x "${BAZEL_BIN}" ]]; then
