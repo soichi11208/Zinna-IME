@@ -19,7 +19,11 @@ Repo: https://github.com/soichi11208/Zinna-IME.git
 Builds:
   - versionName: 0.1.1
     versionCode: 11
-    commit: 0.1.1
+    # A tag of its own, so the version number stays where upstream put it. F-Droid needs a commit
+    # carrying the build-recipe fixes, and those landed after 0.1.1 was tagged and released; the
+    # app itself is unchanged, so bumping its version to describe a build-script change would say
+    # something untrue to anyone reading the version list.
+    commit: 0.1.1-fdroid
     subdir: app
     sudo:
       # The only chance to install anything: fdroidserver purges sudo as soon as these finish.
@@ -45,7 +49,8 @@ Builds:
       - ANDROID_NDK_HOME=$$NDK$$ ./scripts/build_mozc.sh
     ndk: 27.2.12479018
 
-AutoUpdateMode: Version %v
-# Unprefixed, matching 0.0.2 onwards. Anchoring on a digit also skips the one stray
-# v0.0.1-arm64 tag, which was a one-off build artefact rather than a release.
-UpdateCheckMode: Tags ^[0-9]
+# Only the -fdroid tags. Upstream's own release tags (0.0.2 onwards, plus one stray v0.0.1-arm64)
+# are not built here: a release becomes an F-Droid release when a -fdroid tag is cut for it, which
+# is also the point at which the recipe is known to still work.
+AutoUpdateMode: Version %v-fdroid
+UpdateCheckMode: Tags ^[0-9][0-9.]*-fdroid$
