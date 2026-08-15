@@ -43,6 +43,15 @@ Builds:
       # compile.sh packages the built bazel with.
       - apt-get update
       - apt-get install -y build-essential default-jdk-headless python3 unzip zip curl
+      # mozc's MODULE.bazel declares an android_sdk_repository, and the image exports
+      # ANDROID_HOME, so bazel looks for an installed platform and fails the analysis phase with
+      # "No Android SDK apis found" when none is there. The buildserver ships none — the platform
+      # normally arrives later, when gradle asks for it, which is after this point. It also has to
+      # exist before gradle runs, so installing it here costs nothing.
+      #
+      # The build tools go with it: bazel refuses anything below 35.0.0, and neither what the CI
+      # script installs (31.0.0) nor what gradle would pull in on its own (34.0.0) satisfies that.
+      - sdkmanager "platforms;android-35" "build-tools;35.0.0"
     gradle:
       - yes
     prebuild:
