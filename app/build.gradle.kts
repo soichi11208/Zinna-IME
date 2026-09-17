@@ -77,7 +77,7 @@ android {
 
     packaging {
         // libmozc.so must stay page-aligned for the 16 KB page-size requirement on Android 15+.
-        jniLibs.useLegacyPackaging = false
+        jniLibs.useLegacyPackaging = true
     }
 
     // libmozc.so is 13-16 MB per ABI, so a universal APK lands near 83 MB. Splitting drops each
