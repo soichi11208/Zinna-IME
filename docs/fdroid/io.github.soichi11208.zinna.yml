@@ -1,12 +1,3 @@
-// Draft of the fdroiddata metadata for this app. Kept here so it is versioned alongside the build
-// it describes; submitting means copying it into fdroiddata/metadata/ and opening a merge request.
-//
-// The unusual part is `sudo` and the length of `prebuild`. mozc is a bazel project, and bazel is
-// normally installed as a prebuilt binary, which the inclusion policy does not allow. Debian's
-// bazel is 7.7.1 — two majors behind what mozc pins, and unable to resolve mozc's module graph at
-// all. So bazel is built from its own distribution archive, which needs no bazel to build. See
-// scripts/bootstrap_bazel.sh for why that archive and not a git checkout.
-
 Categories:
   - Keyboard & IME
 License: Apache-2.0
@@ -14,10 +5,6 @@ AuthorName: soichi11208
 WebSite: https://soichi-portfolio.soichi1208.workers.dev
 SourceCode: https://github.com/soichi11208/Zinna-IME
 IssueTracker: https://github.com/soichi11208/Zinna-IME/issues
-
-# Both addresses live in the README's donation section rather than in fields of their own. Monero
-# has no field at all, and the Litecoin one is an MWEB address, which fdroidserver's validator
-# rejects — it accepts only legacy and bech32 forms.
 Donate: https://github.com/soichi11208/Zinna-IME/blob/main/README_en.md#donations
 
 AutoName: zinna-IME
@@ -28,59 +15,23 @@ Repo: https://github.com/soichi11208/Zinna-IME.git
 Builds:
   - versionName: 0.1.1
     versionCode: 11
-    # A tag of its own, so the version number stays where upstream put it. F-Droid needs a commit
-    # carrying the build-recipe fixes, and those landed after 0.1.1 was tagged and released; the
-    # app itself is unchanged, so bumping its version to describe a build-script change would say
-    # something untrue to anyone reading the version list.
-    commit: 0.1.1-fdroid
+    commit: f2b68fa434f77ad0bed3801c009d9c71e7d63131
     subdir: app
     sudo:
-      # The only chance to install anything: fdroidserver purges sudo as soon as these finish.
-      #
-      # build-essential is for the bazel bootstrap and for mozc's host tools. The NDK brings its
-      # own clang for the Android targets, but nothing on the image compiles for the host, and
-      # bazel needs a host C++ toolchain before it can build anything at all. zip is what
-      # compile.sh packages the built bazel with.
       - apt-get update
-      - apt-get install -y build-essential default-jdk-headless python3 unzip zip curl
-      # mozc's MODULE.bazel declares an android_sdk_repository, and the image exports
-      # ANDROID_HOME, so bazel looks for an installed platform and fails the analysis phase with
-      # "No Android SDK apis found" when none is there. The buildserver ships none — the platform
-      # normally arrives later, when gradle asks for it, which is after this point. It also has to
-      # exist before gradle runs, so installing it here costs nothing.
-      #
-      # The build tools go with it: bazel refuses anything below 35.0.0, and neither what the CI
-      # script installs (31.0.0) nor what gradle would pull in on its own (34.0.0) satisfies that.
+      - apt-get install -y gcc g++ make libc-dev zip bzip2
       - sdkmanager "platforms;android-35" "build-tools;35.0.0"
     gradle:
       - yes
-    prebuild:
-      # Runs from `subdir`, so everything is relative to the repository root one level up.
+    output: build/outputs/apk/release/app-universal-release-unsigned.apk
+    build:
       - cd ..
-      # bazel, from source, using no bazel.
       - ./scripts/bootstrap_bazel.sh
-      # Supplementary dictionaries. Every source is pinned to a commit and hash-checked.
       - ./scripts/fetch_dictionaries.sh
-      # libmozc.so and mozc.data. This also clones mozc at the commit the script pins and applies
-      # patches/ to it. ANDROID_NDK_HOME makes mozc use the NDK F-Droid supplies instead of
-      # downloading r29 itself; measured working with 27.2.12479018.
-      - ANDROID_NDK_HOME=$$NDK$$ ./scripts/build_mozc.sh
+      - ./scripts/build_mozc.sh
     ndk: 27.2.12479018
 
-# Only the -fdroid tags. Upstream's own release tags (0.0.2 onwards, plus one stray v0.0.1-arm64)
-# are not built here: a release becomes an F-Droid release when a -fdroid tag is cut for it, which
-# is also the point at which the recipe is known to still work.
-AutoUpdateMode: Version %v-fdroid
+AutoUpdateMode: Version
 UpdateCheckMode: Tags ^[0-9][0-9.]*-fdroid$
-
-# Notes for the merge request, not part of the metadata:
-#
-# * The build downloads three things: bazel's distribution archive, mozc, and the dictionaries.
-#   All are pinned — by SHA-256 for the archive and the two dictionary files, by commit for mozc
-#   and for the third dictionary — so a rebuild of the same tag produces the same bytes.
-# * bazel's distribution archive carries `derived/src/java`: Java sources generated from bazel's
-#   own protos, shipped already generated. Generating them instead is not possible from the public
-#   tree, which is missing a Google-internal proto that one of bazel's own protos imports.
-# * It also carries `derived/maven`, third-party Java libraries from Maven Central, and
-#   `derived/jars`, code bazel generated from protos that are in the same archive.
-# * The app declares no permissions, INTERNET included.
+CurrentVersion: 0.1.1
+CurrentVersionCode: 11
