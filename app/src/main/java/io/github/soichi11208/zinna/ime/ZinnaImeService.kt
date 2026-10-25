@@ -1,7 +1,10 @@
 package io.github.soichi11208.zinna.ime
 
 import android.content.Context
+import android.content.ClipboardManager
 import android.inputmethodservice.InputMethodService
+import android.os.Handler
+import android.os.Looper
 import android.text.SpannableString
 import android.text.Spanned
 import android.text.style.UnderlineSpan
@@ -33,6 +36,8 @@ import io.github.soichi11208.zinna.theme.KeyboardTheme
 import io.github.soichi11208.zinna.theme.MaterialYouTheme
 import org.mozc.android.inputmethod.japanese.protobuf.ProtoCommands.Context as MozcContext
 import org.mozc.android.inputmethod.japanese.protobuf.ProtoCommands.KeyEvent
+import java.util.concurrent.Executors
+import java.util.concurrent.TimeUnit
 
 /**
  * The input method itself.
@@ -63,6 +68,25 @@ class ZinnaImeService : InputMethodService() {
     private var builtFromRevision = Int.MIN_VALUE
 
     private val clipboard = ClipboardHistory()
+    private var clipboardManager: ClipboardManager? = null
+    private enum class StripContent { IDLE_ACTIONS, CANDIDATES, CLIPBOARD }
+    private var stripContent = StripContent.IDLE_ACTIONS
+    private val clipboardUiHandler = Handler(Looper.getMainLooper())
+    private val clipboardPoller = Executors.newSingleThreadScheduledExecutor()
+    private var clipboardPollingActive = false
+    private val clipboardListener = ClipboardManager.OnPrimaryClipChangedListener {
+        if (clipboard.record(clipboardManager)) refreshClipboardDisplay()
+    }
+
+    private fun refreshClipboardDisplay() {
+        // Composition can still exist while the strip shows actions or clipboard history.
+        // Refresh what is actually displayed, even if the input window is temporarily hidden.
+        when (stripContent) {
+            StripContent.CLIPBOARD -> showClipboard()
+            StripContent.IDLE_ACTIONS -> showIdleActions()
+            StripContent.CANDIDATES -> Unit
+        }
+    }
 
     /** The table key the previous keystroke sent, for [endTogglingIfRepeat]. */
     private var lastTableKey: String? = null
@@ -100,6 +124,18 @@ class ZinnaImeService : InputMethodService() {
         repository = LayoutRepository(this)
         settings = ImeSettings(this)
         session = MozcSession(this)
+        clipboardManager = getSystemService(Context.CLIPBOARD_SERVICE) as? ClipboardManager
+        clipboardManager?.addPrimaryClipChangedListener(clipboardListener)
+        clipboardPollingActive = true
+        val manager = clipboardManager
+        // Capture while the keyboard is hidden too. Clipboard IPC runs off the UI thread so
+        // missing notifications or a slow clipboard service cannot delay keystrokes.
+        clipboardPoller.scheduleWithFixedDelay({
+            val text = ClipboardHistory.readText(manager)
+            if (text != null) clipboardUiHandler.post {
+                if (clipboardPollingActive && clipboard.add(text)) refreshClipboardDisplay()
+            }
+        }, 0, 250, TimeUnit.MILLISECONDS)
         if (!session.isAvailable) {
             // Without the native engine there is nothing useful to do; the keyboard still renders
             // so the user can switch away rather than being stuck with a dead input field.
@@ -183,6 +219,7 @@ class ZinnaImeService : InputMethodService() {
         )
 
         candidateView = candidates
+        stripContent = StripContent.IDLE_ACTIONS
         keyboardView = keyboard
         builtFromRevision = settings.revision
         loaded?.let { session.applyInputStyle(it.inputStyle) }
@@ -213,9 +250,8 @@ class ZinnaImeService : InputMethodService() {
         lastTableKey = null
         clientContextValid = false
         isComposing = false
-        // The only moment an input method is allowed to read the clipboard is while it is the
-        // active one, which is exactly now.
-        clipboard.record(getSystemService(Context.CLIPBOARD_SERVICE) as? android.content.ClipboardManager)
+        // Also capture the current clip in case it changed while this service was not running.
+        clipboard.record(clipboardManager)
         showIdleActions()
     }
 
@@ -265,9 +301,15 @@ class ZinnaImeService : InputMethodService() {
         currentInputConnection?.finishComposingText()
         lastTableKey = null
         candidateView?.clear()
+        stripContent = StripContent.IDLE_ACTIONS
     }
 
     override fun onDestroy() {
+        clipboardPollingActive = false
+        clipboardPoller.shutdownNow()
+        clipboardUiHandler.removeCallbacksAndMessages(null)
+        clipboardManager?.removePrimaryClipChangedListener(clipboardListener)
+        clipboardManager = null
         session.close()
         super.onDestroy()
     }
@@ -592,6 +634,7 @@ class ZinnaImeService : InputMethodService() {
             candidateView?.expanded = false
             showIdleActions()
         } else {
+            stripContent = StripContent.CANDIDATES
             candidateView?.setCandidates(state.candidates, state.focusedCandidateIndex)
         }
     }
@@ -644,6 +687,7 @@ class ZinnaImeService : InputMethodService() {
      * otherwise unreachable without leaving the keyboard.
      */
     private fun showIdleActions() {
+        stripContent = StripContent.IDLE_ACTIONS
         val view = candidateView ?: return
         val actions = mutableListOf<CandidateStripView.Action>()
         if (clipboard.items().isNotEmpty()) {
@@ -660,6 +704,9 @@ class ZinnaImeService : InputMethodService() {
      */
     private fun showClipboard() {
         val view = candidateView ?: return
+        // Opening history must show the current clip even if its change callback is still queued.
+        clipboard.record(clipboardManager)
+        stripContent = StripContent.CLIPBOARD
         val actions = mutableListOf<CandidateStripView.Action>()
         actions += CandidateStripView.Action(BACK_LABEL) { showIdleActions() }
         for (text in clipboard.items()) {

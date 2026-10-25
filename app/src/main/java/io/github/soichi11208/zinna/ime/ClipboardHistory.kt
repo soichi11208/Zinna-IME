@@ -14,9 +14,9 @@ import android.util.Log
  * clip is still there when you switch apps to paste it — without creating a file of the user's
  * secrets that outlives the reason they were copied.
  *
- * Reading the clipboard at all is only possible because an input method is exempt from the
- * background-access ban while it is the active one; [record] is therefore called when the keyboard
- * opens rather than from a listener that would fire when we cannot read anything.
+ * The default input method is exempt from the background clipboard-access ban. The service
+ * records clipboard changes and also polls every 250 ms for the lifetime of the service,
+ * including while the keyboard is hidden. History mutations stay on the UI thread.
  */
 class ClipboardHistory(private val limit: Int = LIMIT) {
 
@@ -33,40 +33,38 @@ class ClipboardHistory(private val limit: Int = LIMIT) {
      * Skips clips the source marked sensitive — password managers set that flag precisely so
      * keyboards do not do what this class does.
      */
-    fun record(clipboard: ClipboardManager?) {
-        val clip = runCatching { clipboard?.primaryClip }
-            .onFailure { Log.w(TAG, "clipboard unreadable", it) }
-            .getOrNull() ?: return
-
-        if (isSensitive(clip.description)) return
-
-        val text = (0 until clip.itemCount)
-            .mapNotNull { clip.getItemAt(it)?.coerceToText(null)?.toString() }
-            .joinToString("\n")
-            .trim()
-        if (text.isEmpty()) return
-
-        add(text)
-    }
+    fun record(clipboard: ClipboardManager?): Boolean = readText(clipboard)?.let(::add) ?: false
 
     /** The bookkeeping half of [record], separated so it can be tested without a live clipboard. */
-    internal fun add(text: String) {
-        if (text.isEmpty()) return
+    internal fun add(text: String): Boolean {
+        if (text.isEmpty() || entries.firstOrNull() == text) return false
         // A re-copy of something already held moves it to the front instead of duplicating it.
         entries.remove(text)
         entries.addFirst(text)
         while (entries.size > limit) entries.removeLast()
+        return true
     }
 
-    private fun isSensitive(description: ClipDescription?): Boolean {
-        val extras = description?.extras ?: return false
-        // ClipDescription.EXTRA_IS_SENSITIVE is API 33; the string is the same on older releases,
-        // where an app that knows about it can still set it.
-        return extras.getBoolean("android.content.extra.IS_SENSITIVE", false)
-    }
+    companion object {
+        /** Reads off the UI thread without touching the history, which stays owned by the UI thread. */
+        internal fun readText(clipboard: ClipboardManager?): String? = runCatching {
+            val clip = clipboard?.primaryClip ?: return@runCatching null
+            if (isSensitive(clip.description)) return@runCatching null
+            (0 until clip.itemCount)
+                .mapNotNull { clip.getItemAt(it)?.coerceToText(null)?.toString() }
+                .joinToString("\n")
+                .trim()
+                .takeIf { it.isNotEmpty() }
+        }.onFailure { Log.w(TAG, "clipboard unreadable", it) }.getOrNull()
 
-    private companion object {
-        const val TAG = "ClipboardHistory"
-        const val LIMIT = 20
+        private fun isSensitive(description: ClipDescription?): Boolean {
+            val extras = description?.extras ?: return false
+            // ClipDescription.EXTRA_IS_SENSITIVE is API 33; the string is the same on older releases,
+            // where an app that knows about it can still set it.
+            return extras.getBoolean("android.content.extra.IS_SENSITIVE", false)
+        }
+
+        private const val TAG = "ClipboardHistory"
+        private const val LIMIT = 20
     }
 }

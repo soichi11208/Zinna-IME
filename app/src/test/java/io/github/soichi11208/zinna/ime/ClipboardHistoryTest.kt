@@ -1,9 +1,29 @@
 package io.github.soichi11208.zinna.ime
 
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
+import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class ClipboardHistoryTest {
+
+    @Test
+    fun repeatedPollingDoesNotRequestAnotherDisplayUpdate() {
+        val history = ClipboardHistory()
+        assertTrue(history.add("copied"))
+        repeat(20) { assertFalse(history.add("copied")) }
+        assertEquals(listOf("copied"), history.items())
+    }
+
+    @Test
+    fun changedOrRecopiedTextRequestsADisplayUpdate() {
+        val history = ClipboardHistory()
+        assertFalse(history.add(""))
+        assertTrue(history.add("first"))
+        assertTrue(history.add("second"))
+        assertTrue(history.add("first"))
+        assertEquals(listOf("first", "second"), history.items())
+    }
 
     @Test
     fun mostRecentComesFirst() {
