@@ -171,11 +171,10 @@ enum class InputStyle(
     val mozcTableNumber: Int,
     val mozcCompositionMode: Int,
     /**
-     * Which space to type when the space key lands on an empty composition.
+     * Which space to type, both in Mozc and in the client's unconsumed-key fallback.
      *
-     * mozc refuses that keystroke — it comes back `consumed=false` on every plane — so the client
-     * picks the character. This follows mozc's own `space_character_form` default, where a space
-     * takes the width of the input mode: 全角 while writing Japanese, 半角 otherwise.
+     * Japanese layouts use 全角 and other layouts use 半角. Configuring Mozc as well ensures
+     * the same width when the engine inserts the space itself.
      *
      * Stated per plane rather than derived from [mozcCompositionMode], because the number plane
      * borrows HIRAGANA mode for its conversions while still wanting an ASCII space.

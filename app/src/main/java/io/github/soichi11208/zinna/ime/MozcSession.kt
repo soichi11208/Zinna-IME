@@ -57,7 +57,6 @@ class MozcSession(context: Context) {
     }
 
     private var currentStyle: InputStyle? = null
-    private var configApplied = false
 
     /**
      * What the editor looks like around the cursor, handed to mozc with every key.
@@ -98,7 +97,7 @@ class MozcSession(context: Context) {
                 .setType(Input.CommandType.SET_REQUEST)
                 .setRequest(request)
         )
-        applyConfig(engine)
+        applyConfig(engine, style)
 
         // The table alone is not enough. It controls transliteration; the composition mode controls
         // whether mozc runs conversion over the result, so the latin and numeric planes have to be
@@ -142,16 +141,15 @@ class MozcSession(context: Context) {
             ?.toState()
 
     /**
-     * Turns on the two correction features. Both are AND-ed with the Request flags above and both
-     * default to off.
+     * Sets the space width for the layout and turns on the two correction features.
+     * Both correction features are AND-ed with the Request flags above and default to off.
      *
      * `use_typing_correction` is what reaches our TypingCorrectionModel: upstream leaves the
      * predictor's typing-correction path in place but ships a stub supplemental model, so on a
      * stock OSS build this flag changes nothing. See
      * patches/0001-rule-based-typing-correction.patch.
      */
-    private fun applyConfig(engine: MozcEngine) {
-        if (configApplied) return
+    private fun applyConfig(engine: MozcEngine, style: InputStyle) {
         val output = engine.eval(Input.newBuilder().setType(Input.CommandType.GET_CONFIG))
         val builder =
             if (output != null && output.hasConfig()) output.config.toBuilder()
@@ -161,11 +159,16 @@ class MozcSession(context: Context) {
                 .setType(Input.CommandType.SET_CONFIG)
                 .setConfig(
                     builder
+                        // The number layout uses HIRAGANA for conversion, but its spaces must
+                        // stay half-width even when Mozc consumes the key itself.
+                        .setSpaceCharacterForm(
+                            if (style.fullWidthSpace) Config.FundamentalCharacterForm.FUNDAMENTAL_FULL_WIDTH
+                            else Config.FundamentalCharacterForm.FUNDAMENTAL_HALF_WIDTH
+                        )
                         .setUseTypingCorrection(true)
                         .setUseKanaModifierInsensitiveConversion(true)
                 )
         )
-        configApplied = true
     }
 
     fun submit(): State? = sendSessionCommand(SessionCommand.CommandType.SUBMIT)

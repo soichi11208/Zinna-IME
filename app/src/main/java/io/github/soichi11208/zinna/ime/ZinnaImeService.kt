@@ -397,11 +397,10 @@ class ZinnaImeService : InputMethodService() {
     }
 
     /**
-     * Space, which mozc only handles while something is composing.
+     * Lets Mozc handle conversion or space insertion, with a fallback for unconsumed keys.
      *
-     * With an empty composition it returns the key unconsumed on every plane — it has nowhere to
-     * put a space and leaves the character to the client. Rendering that empty response was doing
-     * nothing at all, so space appeared to work only as the second keystroke of a word.
+     * With an empty composition, a half-width space is returned unconsumed for the client to
+     * insert. Rendering that response alone would silently swallow the keystroke.
      */
     private fun handleSpace() {
         val state = session.sendSpecialKey(KeyEvent.SpecialKey.SPACE)
