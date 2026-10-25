@@ -45,6 +45,8 @@ class MozcSession(context: Context) {
          * "nothing to do" silently swallows the keystroke.
          */
         val consumed: Boolean = false,
+        /** Original kana even when conversion has replaced the visible preedit with kanji. */
+        val preeditReading: String = "",
     ) {
         val hasComposition: Boolean get() = preedit.isNotEmpty()
     }
@@ -247,9 +249,13 @@ class MozcSession(context: Context) {
 
     private fun Output.toState(): State {
         val preeditText = StringBuilder()
+        val preeditReading = StringBuilder()
         var cursor = 0
         if (hasPreedit()) {
-            preedit.segmentList.forEach { preeditText.append(it.value) }
+            preedit.segmentList.forEach {
+                preeditText.append(it.value)
+                preeditReading.append(if (it.hasKey()) it.key else it.value)
+            }
             cursor = preedit.cursor
         }
 
@@ -277,6 +283,7 @@ class MozcSession(context: Context) {
             candidates = candidates,
             focusedCandidateIndex = focused,
             consumed = consumed,
+            preeditReading = preeditReading.toString(),
         )
     }
 }

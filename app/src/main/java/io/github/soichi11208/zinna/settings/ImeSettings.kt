@@ -29,6 +29,20 @@ class ImeSettings(context: Context) {
         get() = prefs.getBoolean(KEY_PURE_BLACK, false)
         set(value) = prefs.edit().putBoolean(KEY_PURE_BLACK, value).apply()
 
+    var zenzaiPlusEnabled: Boolean
+        get() = prefs.getBoolean(KEY_ZENZAI_PLUS, false)
+        set(value) {
+            prefs.edit().putBoolean(KEY_ZENZAI_PLUS, value).apply()
+            bumpRevision()
+        }
+
+    var zenzaiMozcEnabled: Boolean
+        get() = prefs.getBoolean(KEY_ZENZAI_MOZC, false)
+        set(value) {
+            prefs.edit().putBoolean(KEY_ZENZAI_MOZC, value).apply()
+            bumpRevision()
+        }
+
     /** How strongly the background image shows through, 0f–1f. */
     var backgroundOpacity: Float
         get() = prefs.getFloat(KEY_BACKGROUND_OPACITY, DEFAULT_BACKGROUND_OPACITY)
@@ -136,6 +150,8 @@ class ImeSettings(context: Context) {
         /** Also the name [io.github.soichi11208.zinna.mozc.ProfileBackup] stores these under. */
         const val NAME = "ime_settings"
         private const val KEY_PURE_BLACK = "pure_black"
+        private const val KEY_ZENZAI_PLUS = "zenzai_plus_enabled"
+        private const val KEY_ZENZAI_MOZC = "zenzai_mozc_enabled"
         private const val KEY_BACKGROUND_OPACITY = "background_opacity"
         private const val KEY_REVISION = "revision"
         const val BACKGROUND_DIR = "backgrounds"

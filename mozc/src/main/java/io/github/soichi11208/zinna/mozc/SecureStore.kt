@@ -9,6 +9,8 @@ import javax.crypto.Cipher
 import javax.crypto.KeyGenerator
 import javax.crypto.SecretKey
 import javax.crypto.spec.GCMParameterSpec
+import java.io.InputStream
+import java.io.OutputStream
 
 /**
  * At-rest encryption for the files this app writes about what the user types.
@@ -75,6 +77,36 @@ object SecureStore {
         } catch (e: Exception) {
             Log.e(TAG, "failed to read ${file.name}", e)
             null
+        }
+    }
+
+    /** Streams large neural snapshots without allocating two full snapshots on the Java heap. */
+    fun writeStream(file: File, writer: (OutputStream) -> Unit): Boolean {
+        val temporary = File(file.parentFile, file.name + ".new")
+        return try {
+            file.parentFile?.mkdirs()
+            temporary.outputStream().use { output ->
+                SnapshotCipher.encrypt(output, key(), writer)
+            }
+            check(temporary.renameTo(file))
+            true
+        } catch (e: Exception) {
+            Log.e(TAG, "failed to write encrypted snapshot", e)
+            false
+        } finally { temporary.delete() }
+    }
+
+    /** Caller must not apply decrypted state until this returns true (GCM authentication). */
+    fun readStream(file: File, reader: (InputStream) -> Unit): Boolean {
+        if (!file.isFile) return false
+        return try {
+            file.inputStream().use { input ->
+                SnapshotCipher.decrypt(input, key(), reader)
+            }
+            true
+        } catch (e: Exception) {
+            Log.e(TAG, "failed to authenticate encrypted snapshot", e)
+            false
         }
     }
 

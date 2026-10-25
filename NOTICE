@@ -51,3 +51,21 @@ Bundled supplementary dictionary:
   not adopt a Creative Commons licence, and asks only that it say it uses this
   community-built open-source dictionary. This notice is that statement.
   zinna-IME itself remains Apache 2.0.
+
+Optional experimental zenzai-plus build (-Pzenzai=true):
+  zenzai-plus-ft-f16.gguf, supplied by soichi1208:
+  https://huggingface.co/soichi1208/zenzai-plus
+  Fine-tuned from Miwa-Keita/zenz-v2.5-small (Keita Miwa), based on
+  ku-nlp/gpt2-small-japanese-char (Kyoto University Language Media Laboratory).
+  Model weights: Creative Commons Attribution-ShareAlike 4.0 International.
+  https://creativecommons.org/licenses/by-sa/4.0/
+  The supplied weights are bundled unchanged; SHA-256 is recorded in assets/zenzai/model.json.
+  assets/zenzai/MODEL_CARD.md contains the supplied model attribution.
+
+  llama.cpp / GGML, Copyright (c) 2023-2024 The ggml authors, MIT License.
+  Compatible source supplied with zenzai-plus-Hazkey-Fcitx5, whose original
+  modifications are dedicated to the public domain under The Unlicense.
+  https://github.com/ggml-org/llama.cpp
+  Full runtime MIT notice: assets/zenzai/llama-LICENSE.txt in optional builds.
+  The JNI bridge and prompt construction in zinna-IME are independently written;
+  no Hazkey/Fcitx or Swift conversion code is linked into this Android application.

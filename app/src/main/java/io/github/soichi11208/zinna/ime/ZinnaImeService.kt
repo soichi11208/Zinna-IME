@@ -2,6 +2,7 @@ package io.github.soichi11208.zinna.ime
 
 import android.content.Context
 import android.content.ClipboardManager
+import android.content.SharedPreferences
 import android.inputmethodservice.InputMethodService
 import android.os.Handler
 import android.os.Looper
@@ -15,6 +16,7 @@ import android.view.inputmethod.ExtractedTextRequest
 import android.view.inputmethod.InputConnection
 import android.view.inputmethod.InputMethodManager
 import android.widget.LinearLayout
+import android.widget.Toast
 import androidx.core.view.ViewCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.doOnAttach
@@ -51,7 +53,28 @@ class ZinnaImeService : InputMethodService() {
 
     private lateinit var repository: LayoutRepository
     private lateinit var settings: ImeSettings
-    private lateinit var session: MozcSession
+    private lateinit var session: ConversionSession
+    private lateinit var zenzai: ZenzaiEngine
+    private var zenzaiCandidate: MozcSession.Candidate? = null
+    private var zenzaiDictionary = emptyList<io.github.soichi11208.zinna.mozc.UserDictionary.Entry>()
+    private val conversionSettingsListener = SharedPreferences.OnSharedPreferenceChangeListener { _, key ->
+        if (key == "zenzai_plus_enabled" || key == "zenzai_mozc_enabled") {
+            if (isComposing) render(session.submit())
+            cancelZenzai()
+            session.setZenzaiEnabled(settings.zenzaiPlusEnabled, settings.zenzaiMozcEnabled)
+            if (settings.zenzaiPlusEnabled && settings.zenzaiMozcEnabled) {
+                io.github.soichi11208.zinna.mozc.UserDictionary(this).sync()
+            }
+            zenzai.setEnabled(settings.zenzaiPlusEnabled)
+            lastState = null
+            isComposing = false
+            if (settings.zenzaiPlusEnabled) zenzai.syncDictionary { zenzaiDictionary = it }
+            else zenzaiDictionary = emptyList()
+            showIdleActions()
+        } else if (key == io.github.soichi11208.zinna.mozc.UserDictionary.REVISION_KEY && settings.zenzaiPlusEnabled) {
+            zenzai.syncDictionary { zenzaiDictionary = it }
+        }
+    }
 
     private var keyboardView: FlickKeyboardView? = null
     private var candidateView: CandidateStripView? = null
@@ -123,7 +146,12 @@ class ZinnaImeService : InputMethodService() {
         super.onCreate()
         repository = LayoutRepository(this)
         settings = ImeSettings(this)
-        session = MozcSession(this)
+        session = ConversionSession(this)
+        zenzai = ZenzaiEngine(this) {
+            Toast.makeText(this, "zenzai-plusの処理に失敗しました。かな入力は引き続き利用できます", Toast.LENGTH_LONG).show()
+        }
+        getSharedPreferences(ImeSettings.NAME, Context.MODE_PRIVATE)
+            .registerOnSharedPreferenceChangeListener(conversionSettingsListener)
         clipboardManager = getSystemService(Context.CLIPBOARD_SERVICE) as? ClipboardManager
         clipboardManager?.addPrimaryClipChangedListener(clipboardListener)
         clipboardPollingActive = true
@@ -241,6 +269,12 @@ class ZinnaImeService : InputMethodService() {
 
     override fun onStartInputView(info: EditorInfo?, restarting: Boolean) {
         super.onStartInputView(info, restarting)
+        zenzai.setEnabled(settings.zenzaiPlusEnabled)
+        session.setZenzaiEnabled(settings.zenzaiPlusEnabled, settings.zenzaiMozcEnabled)
+        if (settings.zenzaiPlusEnabled) zenzai.syncDictionary { zenzaiDictionary = it }
+        else zenzaiDictionary = emptyList()
+        cancelZenzai()
+        lastState = null
         // Settings live in another process's Activity, so this is the first moment we can notice
         // they changed. Rebuilding only on a revision bump keeps the common case free.
         if (settings.revision != builtFromRevision) {
@@ -287,6 +321,7 @@ class ZinnaImeService : InputMethodService() {
         clientContextValid = false
         // candidatesStart < 0 means the editor is no longer showing a composing region.
         if (candidatesStart < 0 && isComposing) {
+            cancelZenzai()
             session.resetContext()
             isComposing = false
             lastTableKey = null
@@ -296,6 +331,8 @@ class ZinnaImeService : InputMethodService() {
 
     override fun onFinishInput() {
         super.onFinishInput()
+        cancelZenzai()
+        lastState = null
         // Anything half-composed at this point can no longer be committed anywhere sensible.
         session.resetContext()
         currentInputConnection?.finishComposingText()
@@ -305,6 +342,9 @@ class ZinnaImeService : InputMethodService() {
     }
 
     override fun onDestroy() {
+        getSharedPreferences(ImeSettings.NAME, Context.MODE_PRIVATE)
+            .unregisterOnSharedPreferenceChangeListener(conversionSettingsListener)
+        zenzai.close()
         clipboardPollingActive = false
         clipboardPoller.shutdownNow()
         clipboardUiHandler.removeCallbacksAndMessages(null)
@@ -319,7 +359,7 @@ class ZinnaImeService : InputMethodService() {
             is KeyAction.Input -> {
                 refreshClientContext()
                 endTogglingIfRepeat(action.text)
-                render(session.sendText(action.text))
+                render(session.sendText(action.text, output.label))
                 lastTableKey = action.text
             }
 
@@ -340,9 +380,12 @@ class ZinnaImeService : InputMethodService() {
             // With something composing, this converts; with nothing to convert it behaves as
             // Enter. Inserting a space there would be the desktop behaviour and is not what a
             // 確定 key on a phone should do.
-            is KeyAction.Convert ->
-                if (isComposing) render(session.sendSpecialKey(KeyEvent.SpecialKey.SPACE))
+            is KeyAction.Convert -> {
+                val neural = zenzaiCandidate
+                if (isComposing && neural != null) onCandidateSelected(neural)
+                else if (isComposing) render(session.sendSpecialKey(KeyEvent.SpecialKey.SPACE))
                 else handleEnter()
+            }
 
             is KeyAction.Enter -> handleEnter()
 
@@ -445,6 +488,9 @@ class ZinnaImeService : InputMethodService() {
      * insert. Rendering that response alone would silently swallow the keystroke.
      */
     private fun handleSpace() {
+        if (session.zenzaiEnabled && isComposing) {
+            zenzaiCandidate?.let { onCandidateSelected(it); return }
+        }
         val state = session.sendSpecialKey(KeyEvent.SpecialKey.SPACE)
         if (state == null || !state.consumed) {
             val fullWidth = layout?.inputStyle?.fullWidthSpace ?: false
@@ -485,6 +531,10 @@ class ZinnaImeService : InputMethodService() {
     private fun handleEnter() {
         val ic = currentInputConnection ?: return
         if (isComposing) {
+            zenzaiCandidate?.let {
+                onCandidateSelected(it)
+                return
+            }
             render(session.submit())
             return
         }
@@ -599,7 +649,12 @@ class ZinnaImeService : InputMethodService() {
             return
         }
 
+        cancelZenzai()
+
         val hadComposition = isComposing
+        if (state.committedText.isNotEmpty() && !state.hasComposition && hadComposition) {
+            learnConfirmed(state.committedText)
+        }
         val removeOldEditorComposition =
             BackspaceRouting.shouldRemoveOldEditorComposition(
                 hadComposition = hadComposition,
@@ -635,8 +690,52 @@ class ZinnaImeService : InputMethodService() {
             showIdleActions()
         } else {
             stripContent = StripContent.CANDIDATES
-            candidateView?.setCandidates(state.candidates, state.focusedCandidateIndex)
+            candidateView?.setCandidates(zenzaiBaseCandidates(state), state.focusedCandidateIndex)
         }
+        requestZenzai(state)
+    }
+
+    private fun cancelZenzai() {
+        zenzai.cancel()
+        zenzaiCandidate = null
+    }
+
+    private fun requestZenzai(state: MozcSession.State) {
+        if (!ZenzaiConversion.canConvert(
+                enabled = settings.zenzaiPlusEnabled,
+                composing = state.hasComposition,
+                japanese = layout?.inputStyle?.fullWidthSpace == true,
+                password = isPasswordField(currentInputEditorInfo?.inputType ?: 0),
+            )) return
+        val prompt = ZenzaiConversion.prompt(
+            state.preeditReading,
+            session.clientContext?.precedingText.orEmpty(),
+        ) ?: return
+        val base = zenzaiBaseCandidates(state)
+        zenzai.request(prompt) { candidate ->
+            // Candidate taps and editor changes may finish composition while inference runs.
+            if (lastState !== state || !isComposing) return@request
+            zenzaiCandidate = candidate
+            if (stripContent == StripContent.CLIPBOARD) return@request
+            val candidates = ZenzaiConversion.candidates(base, candidate)
+            stripContent = StripContent.CANDIDATES
+            candidateView?.setCandidates(candidates, 0)
+        }
+    }
+
+    private fun zenzaiBaseCandidates(state: MozcSession.State): List<MozcSession.Candidate> {
+        if (!session.zenzaiEnabled) return state.candidates
+        val key = ZenzaiConversion.prompt(state.preeditReading, "") ?: return state.candidates
+        val registered = zenzaiDictionary.filter { ZenzaiConversion.prompt(it.reading, "") == key }
+            .mapIndexed { index, entry -> MozcSession.Candidate(-100 - index, entry.word) }
+        return (registered + state.candidates).distinctBy { it.text }
+    }
+
+    private fun learnConfirmed(output: String) {
+        if (!session.zenzaiEnabled || !settings.zenzaiPlusEnabled || isPasswordField(currentInputEditorInfo?.inputType ?: 0) ||
+            (currentInputEditorInfo?.imeOptions ?: 0) and EditorInfo.IME_FLAG_NO_PERSONALIZED_LEARNING != 0) return
+        val reading = lastState?.preeditReading.orEmpty()
+        zenzai.confirm(reading, session.clientContext?.precedingText.orEmpty(), output)
     }
 
 
@@ -653,6 +752,7 @@ class ZinnaImeService : InputMethodService() {
      * they stay in the editor as ordinary text; only the ability to keep converting them is lost.
      */
     private fun recoverFromLostSession(ic: android.view.inputmethod.InputConnection) {
+        cancelZenzai()
         Log.w(TAG, "no response from mozc; finishing the composition and resetting state")
         if (isComposing) ic.finishComposingText()
         isComposing = false
@@ -668,6 +768,8 @@ class ZinnaImeService : InputMethodService() {
      * finish what it was composing.
      */
     private fun onCandidateSelected(candidate: MozcSession.Candidate) {
+        if (candidate.id < 0 && isComposing) learnConfirmed(candidate.text)
+        cancelZenzai()
         candidateView?.expanded = false
         if (candidate.id >= 0) {
             render(session.selectCandidate(candidate.id))

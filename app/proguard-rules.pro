@@ -8,3 +8,5 @@
 # is noise once the numbers are there.
 -keepattributes SourceFile,LineNumberTable
 -renamesourcefileattribute SourceFile
+
+-keep class io.github.soichi11208.zinna.ime.ZenzaiNative { *; }

@@ -1,0 +1,19 @@
+--- a/src/llama-ttt.cpp
++++ b/src/llama-ttt.cpp
+@@ -139,6 +139,8 @@
+     auto state = std::make_shared<llama_ttt_state>();
+     auto * first = model.layers.at(0).ffn_down;
+     auto * device = ggml_backend_buft_get_device(ggml_backend_buffer_get_type(first->buffer));
++    if (!device) device = ggml_backend_dev_by_type(GGML_BACKEND_DEVICE_TYPE_CPU);
++    require(device != nullptr, "native TTT backend device is unavailable");
+     if (previous) {
+         state->backend = previous->backend;
+         state->constants_owner = previous->constants_owner ? previous->constants_owner : previous;
+@@ -457,6 +459,7 @@
+             auto * weight = model.layers[i].ffn_down;
+             require(ggml_are_same_shape(weight, state.down[i]), "native TTT version shape mismatch");
+             auto * device = ggml_backend_buft_get_device(ggml_backend_buffer_get_type(weight->buffer));
++            if (!device) device = ggml_backend_dev_by_type(GGML_BACKEND_DEVICE_TYPE_CPU);
+             require(device == ggml_backend_get_device(state.backend.get()), "native TTT version device mismatch");
+         }
+         llama_synchronize(ctx);

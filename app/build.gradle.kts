@@ -18,6 +18,23 @@ val signing = rootProject.file("keystore.properties").takeIf { it.isFile }?.let 
     Properties().apply { file.inputStream().use { load(it) } }
 }
 
+// The experimental model is an explicit build option; normal source builds stay small.
+val bundleZenzai = providers.gradleProperty("zenzai").orNull == "true"
+if (bundleZenzai) {
+    val validateZenzai by tasks.registering {
+        val model = layout.projectDirectory.file("src/zenzai/assets/zenzai/zenzai-plus-ft-f16.gguf")
+        val metadata = layout.projectDirectory.file("src/zenzai/assets/zenzai/model.json")
+        val library = layout.projectDirectory.file("src/zenzai/jniLibs/arm64-v8a/libzinna_zenzai.so")
+        inputs.files(model, metadata, library)
+        doLast {
+            check(model.asFile.isFile && metadata.asFile.isFile && library.asFile.isFile) {
+                "Run scripts/prepare_zenzai.py and scripts/build_zenzai.sh before -Pzenzai=true"
+            }
+        }
+    }
+    tasks.named("preBuild").configure { dependsOn(validateZenzai) }
+}
+
 android {
     namespace = "io.github.soichi11208.zinna"
     compileSdk = 35
@@ -75,6 +92,12 @@ android {
         compose = true
     }
 
+    if (bundleZenzai) {
+        sourceSets["main"].assets.srcDir("src/zenzai/assets")
+        sourceSets["main"].jniLibs.srcDir("src/zenzai/jniLibs")
+    }
+    androidResources.noCompress += "gguf"
+
     packaging {
         // libmozc.so must stay page-aligned for the 16 KB page-size requirement on Android 15+.
         jniLibs.useLegacyPackaging = true
@@ -87,8 +110,9 @@ android {
         abi {
             isEnable = true
             reset()
-            include("arm64-v8a", "armeabi-v7a", "x86_64", "x86")
-            isUniversalApk = true
+            if (bundleZenzai) include("arm64-v8a")
+            else include("arm64-v8a", "armeabi-v7a", "x86_64", "x86")
+            isUniversalApk = !bundleZenzai
         }
     }
 }

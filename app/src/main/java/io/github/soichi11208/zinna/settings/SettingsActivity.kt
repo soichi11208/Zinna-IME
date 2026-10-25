@@ -30,6 +30,7 @@ import androidx.compose.material3.Slider
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -72,7 +73,15 @@ class SettingsActivity : ComponentActivity() {
 private fun SettingsScreen(modifier: Modifier = Modifier) {
     val context = LocalContext.current
     val repository = remember { LayoutRepository(context) }
-    val engineStatus = remember { describeEngine(context) }
+    var engineStatus by remember { mutableStateOf(describeEngine(context)) }
+    DisposableEffect(context) {
+        val prefs = context.getSharedPreferences(ImeSettings.NAME, Context.MODE_PRIVATE)
+        val listener = android.content.SharedPreferences.OnSharedPreferenceChangeListener { _, key ->
+            if (key == "zenzai_plus_enabled" || key == "zenzai_mozc_enabled") engineStatus = describeEngine(context)
+        }
+        prefs.registerOnSharedPreferenceChangeListener(listener)
+        onDispose { prefs.unregisterOnSharedPreferenceChangeListener(listener) }
+    }
     val layouts = remember { repository.availableLayoutIds() }
     val themes = remember { repository.availableThemeIds() }
 
@@ -86,6 +95,7 @@ private fun SettingsScreen(modifier: Modifier = Modifier) {
         Text("zinna-IME", style = MaterialTheme.typography.headlineMedium)
 
         InfoCard(title = "変換エンジン", body = engineStatus)
+        ZenzaiCard()
         InfoCard(title = "追加辞書", body = describeDictionaries(context))
         InfoCard(title = "配列", body = layouts.joinToString(", ").ifEmpty { "(なし)" })
         InfoCard(title = "テーマ", body = themes.joinToString(", ").ifEmpty { "(なし)" })
@@ -117,6 +127,59 @@ private fun SettingsScreen(modifier: Modifier = Modifier) {
             },
             modifier = Modifier.fillMaxWidth(),
         ) { Text("キーボードを選択") }
+    }
+}
+
+@Composable
+private fun ZenzaiCard() {
+    val context = LocalContext.current
+    val settings = remember { ImeSettings(context) }
+    val bundled = remember { io.github.soichi11208.zinna.ime.ZenzaiEngine.isBundled(context) }
+    var enabled by remember { mutableStateOf(settings.zenzaiPlusEnabled) }
+    var mozcEnabled by remember { mutableStateOf(settings.zenzaiMozcEnabled) }
+    val prefs = remember { context.getSharedPreferences(ImeSettings.NAME, Context.MODE_PRIVATE) }
+    var updates by remember { mutableStateOf(prefs.getLong("zenzai_ttt_updates", 0)) }
+    var words by remember { mutableStateOf(prefs.getInt("zenzai_dictionary_trained", 0)) }
+    var requested by remember { mutableStateOf(false) }
+    DisposableEffect(prefs) {
+        val listener = android.content.SharedPreferences.OnSharedPreferenceChangeListener { _, _ ->
+            updates = prefs.getLong("zenzai_ttt_updates", 0)
+            words = prefs.getInt("zenzai_dictionary_trained", 0)
+        }
+        prefs.registerOnSharedPreferenceChangeListener(listener)
+        onDispose { prefs.unregisterOnSharedPreferenceChangeListener(listener) }
+    }
+    Card(modifier = Modifier.fillMaxWidth()) {
+        Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                Text("zenzai-plus（実験的）", modifier = Modifier.weight(1f))
+                Switch(
+                    checked = enabled,
+                    enabled = bundled || enabled,
+                    onCheckedChange = { enabled = it; settings.zenzaiPlusEnabled = it },
+                )
+            }
+            Text(
+                if (bundled) "zenzai-plusの候補を常に先頭に表示します。確定した入力と登録した辞書の単語をTTTで学習します。初回は読み込みに時間がかかります。"
+                else "このビルドにはzenzai-plusモデルが含まれていません。",
+                style = MaterialTheme.typography.bodySmall,
+            )
+            if (bundled) {
+                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                    Text("Mozc候補を併用", modifier = Modifier.weight(1f))
+                    Switch(
+                        checked = mozcEnabled,
+                        enabled = enabled,
+                        onCheckedChange = { mozcEnabled = it; settings.zenzaiMozcEnabled = it },
+                    )
+                }
+                Text("TTT学習: $updates 件 / 辞書学習: $words 語", style = MaterialTheme.typography.bodySmall)
+                OutlinedButton(enabled = enabled, onClick = {
+                    prefs.edit().putInt(UserDictionary.REVISION_KEY, prefs.getInt(UserDictionary.REVISION_KEY, 0) + 1).apply()
+                    requested = true
+                }) { Text(if (requested) "辞書学習を予約しました" else "ユーザー辞書を学習") }
+            }
+        }
     }
 }
 
@@ -559,10 +622,13 @@ private fun InfoCard(title: String, body: String) {
 private fun describeDictionaries(context: Context): String =
     // Baked into mozc.data at build time rather than imported at runtime, so there is no state to
     // report — either the engine loaded or it did not.
-    if (MozcEngine.get(context) == null) "—"
+    if (ImeSettings(context).zenzaiPlusEnabled) "zenzai-plus / ユーザー辞書"
+    else if (MozcEngine.get(context) == null) "—"
     else "ニコニコ大百科×ピクシブ百科事典 / カタカナ語→英語 / Wikipedia 見出し"
 
 private fun describeEngine(context: Context): String {
+    if (ImeSettings(context).zenzaiPlusEnabled) return if (ImeSettings(context).zenzaiMozcEnabled)
+        "zenzai-plus（実験的） / Mozc候補を併用" else "zenzai-plus（実験的） / Mozc無効"
     val engine = MozcEngine.get(context)
         ?: return "読み込み失敗 — この ABI 用の libmozc.so がありません (scripts/build_mozc.sh を実行)"
     val version = engine.dataVersion.ifEmpty { "unknown" }

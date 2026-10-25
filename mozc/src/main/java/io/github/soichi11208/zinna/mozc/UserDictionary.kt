@@ -74,6 +74,9 @@ class UserDictionary(context: Context) {
             file,
             entries.joinToString("\n") { "${it.reading}\t${it.word}\t${it.pos}\t${it.comment}" },
         )
+        appContext.getSharedPreferences("ime_settings", Context.MODE_PRIVATE).let { prefs ->
+            prefs.edit().putInt(REVISION_KEY, prefs.getInt(REVISION_KEY, 0) + 1).apply()
+        }
         sync()
         return entries
     }
@@ -86,6 +89,9 @@ class UserDictionary(context: Context) {
      * "clear app data" refills itself.
      */
     fun sync() {
+        val prefs = appContext.getSharedPreferences("ime_settings", Context.MODE_PRIVATE)
+        if (prefs.getBoolean("zenzai_plus_enabled", false) &&
+            !prefs.getBoolean("zenzai_mozc_enabled", false)) return
         sync(MozcEngine.get(appContext) ?: return)
     }
 
@@ -150,6 +156,7 @@ class UserDictionary(context: Context) {
     }
 
     companion object {
+        const val REVISION_KEY = "zenzai_dictionary_revision"
         private const val TAG = "UserDictionary"
         private const val FILE_NAME = "user_dictionary.enc"
 

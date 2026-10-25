@@ -25,6 +25,8 @@ LTC:ltcmweb1qqd974nfw2hn2hua5mefltrxe3yeunceqqwd4je76q9pqmw48q0nz2qel738v9anp6rj
 
 ## ビルド
 
+実験的なzenzai-plusモデルを同梱する場合は [専用ビルド手順](docs/zenzai-plus.md) を参照。
+
 ### 前提
 
 - JDK 17 以上

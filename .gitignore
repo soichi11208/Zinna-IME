@@ -31,6 +31,8 @@ keystore.properties
 
 # Built APKs handed over for testing
 /dist/
+/third_party/zenzai-llama/
+/app/src/zenzai/
 
 # Dictionary sources for the system dictionary build
 /third_party/dictionaries/
